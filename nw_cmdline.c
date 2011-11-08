@@ -189,11 +189,11 @@ void align_from_file(gzFile* file,
 
     if(print_score)
     {
-      printf("%s\n%s\nscore: %i\n", *alignment_a, *alignment_b, score);
+      printf("%s\n%s\nscore: %i\n\n", *alignment_a, *alignment_b, score);
     }
     else
     {
-      printf("%s\n%s\n", *alignment_a, *alignment_b);
+      printf("%s\n%s\n\n", *alignment_a, *alignment_b);
     }
   }
 }

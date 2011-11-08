@@ -1,0 +1,78 @@
+Needleman-Wunsch global alignment
+Isaac Turner <turner.isaac@gmail.com>
+25 May 2011
+
+GNU General Public License (v3 or later)
+
+== Build ==
+
+isaac$ gcc -o needleman_wunsch -Wall -lz nw_cmdline.c needleman_wunsch.c utility_lib.c string_buffer.c
+
+== Run ==
+
+Baiscs:
+
+isaac$ ./needleman_wunsch CAGACGT CGATA
+CAGACGT
+C--GATA
+isaac$
+
+
+Print alignment scores:
+
+isaac$ ./needleman_wunsch --printscores CAGACGT CGATA
+CAGACGT
+C--GATA
+-15
+isaac$
+
+
+Read from file:
+
+dna.fa contains:
+>seqA
+ACAATAGAC
+>seqB
+ACGAATAGAT
+>seqC
+ACGTGA
+CAGAT
+>seqD
+GTGGACG
+AGTA
+isaac$
+
+isaac$ ./needleman_wunsch --printscores --file dna.fa.gz
+AC-AATAGAC
+ACGAATAGAT
+score: -3
+
+ACGTGACAGAT
+GTGGACGAGTA
+score: -5
+
+
+Reading from STDIN:
+
+isaac$ gzip -d -c dna.fa.gz | ./needleman_wunsch --stdin
+AC-AATAGAC
+ACGAATAGAT
+
+ACGTGACAGAT
+GTGGACGAGTA
+
+
+Set different scoring systems
+
+isaac$ ./needleman_wunsch --match 1 --mismatch 0 --gapopen -10 --gapextend 0 ACGTGCCCCACAGAT AGGTGGACGAGAT
+
+== Development ==
+
+Short term goals:
+- support different alphabets (not just acgt)
+- different scoring for gaps at begining and end
+- pretty printing
+- printing colour
+
+Long term goals:
+- allow inversions
