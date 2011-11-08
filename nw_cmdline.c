@@ -178,7 +178,7 @@ void align_from_file(gzFile* file,
     {
       // Expand memory used for storing result
       *max_alignment = new_max_alignment;
-      nw_realloc_mem(alignment_a, alignment_b, new_max_alignment);
+      nw_realloc_mem(new_max_alignment, alignment_a, alignment_b);
     }
 
     // Align

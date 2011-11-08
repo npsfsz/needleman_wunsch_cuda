@@ -38,7 +38,7 @@ int nw_alloc_mem(const char* seq_a, const char* seq_b,
                  char** alignment_a, char** alignment_b);
 
 // length is = length_a + length_b
-int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b)
+int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b);
 
 /* Vanilla Needleman Wunsch */
 
