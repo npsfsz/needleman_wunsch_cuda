@@ -23,7 +23,7 @@ Print alignment scores:
 isaac$ ./needleman_wunsch --printscores CAGACGT CGATA
 CAGACGT
 C--GATA
--15
+score: -15
 isaac$
 
 

@@ -341,7 +341,7 @@ int main(int argc, char* argv[])
     printf("%s\n%s\n", alignment_a, alignment_b);
     
     if(print_score) {
-      printf("%i\n", alignment_score);
+      printf("score: %i\n", alignment_score);
     }
   }
   else
