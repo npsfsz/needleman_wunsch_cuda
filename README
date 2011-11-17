@@ -6,7 +6,7 @@ GNU General Public License (v3 or later)
 
 == Build ==
 
-isaac$ gcc -o needleman_wunsch -Wall -lz nw_cmdline.c needleman_wunsch.c utility_lib.c string_buffer.c
+isaac$ make
 
 == Run ==
 
@@ -66,13 +66,12 @@ Set different scoring systems
 
 isaac$ ./needleman_wunsch --match 1 --mismatch 0 --gapopen -10 --gapextend 0 ACGTGCCCCACAGAT AGGTGGACGAGAT
 
+
 == Development ==
 
 Short term goals:
 - support different alphabets (not just acgt)
-- different scoring for gaps at begining and end
-- pretty printing
-- printing colour
+- different scoring for gaps at beginning and end
 
 Long term goals:
 - allow inversions

@@ -4,13 +4,7 @@
  author: Isaac Turner <isaac.turner@dtc.ox.ac.uk>
  Copyright (C) 6-Nov-2011
  
- == Build
- cp ../utility_lib/utility_lib.* .
- cp ../string_buffer/string_buffer.* .
- gcc -o NeedlemanWunsch -Wall -lz nw_cmdline.c needleman_wunsch.c utility_lib.c string_buffer.c
-
- == Development
- - add non-affine gap alignment
+ see: README
 
  == License
  This program is free software: you can redistribute it and/or modify
@@ -40,6 +34,10 @@
 
 char* cmd;
 
+char* mismatch_start_colour = "\033[92m"; // Mismatch (GREEN)
+char* indel_start_colour = "\033[91m"; // Insertion / deletion (RED)
+char* colour_stop = "\033[0m";
+
 void print_usage(char* err_msg)
 {
   if(err_msg != NULL)
@@ -57,9 +55,12 @@ void print_usage(char* err_msg)
   fprintf(stderr, "    --mismatch <score>   default: %i\n", nw_mismatch_penalty);
   fprintf(stderr, "    --gapopen <score>    default: %i\n", nw_gap_open_penalty);
   fprintf(stderr, "    --gapextend <score>  default: %i\n", nw_gap_extend_penalty);
-  fprintf(stderr, "    --file <file>\n");
+  fprintf(stderr, "    --file <file>        File reading with gzip support\n");
   fprintf(stderr, "    --printscores\n");
-  fprintf(stderr, "    --stdin              Read from STDIN or piped input\n");
+  fprintf(stderr, "    --pretty             Print with a descriptor line\n");
+  fprintf(stderr, "    --colour             Print with in colour\n");
+  fprintf(stderr, "    --stdin              Read from STDIN (interactive command line)\n");
+  fprintf(stderr, "    --pipe               Read from piped input (STDIN+gzip support)\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "  To do alignment without affine gap, set `gapopen' to match `gapextend'\n");
   fprintf(stderr, "                       <turner.isaac@gmail.com>\n");
@@ -97,10 +98,124 @@ char read_fasta_sequence(STRING_BUFFER* sbuf, gzFile* file)
   return 1;
 }
 
+void colour_print_alignment_against(char *alignment_a, char *alignment_b)
+{
+  int i;
+  char red = 0, green = 0;
+
+  for(i = 0; alignment_a[i] != '\0'; i++)
+  {
+    if(alignment_b[i] == '-')
+    {
+      if(!red)
+      {
+        printf("%s", indel_start_colour);
+        red = 1;
+      }
+    }
+    else if(red)
+    {
+      red = 0;
+      printf("%s", colour_stop);
+    }
+    
+    
+    if(alignment_a[i] != alignment_b[i] &&
+       alignment_a[i] != '-' && alignment_b[i] != '-')
+    {
+      if(!green)
+      {
+        printf("%s", mismatch_start_colour);
+        green = 1;
+      }
+    }
+    else if(green)
+    {
+      green = 0;
+      printf("%s", colour_stop);
+    }
+
+    printf("%c", alignment_a[i]);
+  }
+
+  printf("\n");
+}
+
+void align(char *seq_a, char *seq_b,
+           char *alignment_a, char *alignment_b,
+           int sub_matrix[4][4],
+           const int gap_open, const int gap_extend,
+           const char print_scores,
+           const char print_pretty, const char print_colour)
+{
+  int score = needleman_wunsch_affine(seq_a, seq_b,
+                                      alignment_a, alignment_b,
+                                      sub_matrix,
+                                      gap_open, gap_extend);
+
+  //printf("%c - %c\n", alignment_a[1], alignment_b[1]);
+  //exit(EXIT_SUCCESS);
+
+  if(print_colour)
+  {
+    // Print alignment line 1
+    colour_print_alignment_against(alignment_a, alignment_b);
+  }
+  else
+  {
+    printf("%s\n", alignment_a);
+  }
+  
+  if(print_pretty)
+  {
+    // Print spacer
+    int i;
+    char c;
+
+    for(i = 0; alignment_a[i] != '\0'; i++)
+    {
+      if(alignment_a[i] == '-' || alignment_b[i] == '-')
+      {
+        c = ' ';
+      }
+      else if(alignment_a[i] == alignment_b[i])
+      {
+        c = '|';
+      }
+      else
+      {
+        c = '*';
+      }
+
+      printf("%c", c);
+    }
+    
+    printf("\n");
+  }
+
+  if(print_colour)
+  {
+    // Print alignment line 2
+    colour_print_alignment_against(alignment_b, alignment_a);
+  }
+  else
+  {
+    printf("%s\n", alignment_b);
+  }
+
+  if(print_scores)
+  {
+    printf("score: %i\n", score);
+  }
+  
+  printf("\n");
+}
+
 void align_from_file(gzFile* file,
                      int sub_matrix[4][4],
                      const int gap_open, const int gap_extend,
-                     const char print_score,
+                     const char print_scores,
+                     const char print_pretty, const char print_colour,
                      char **alignment_a, char **alignment_b, int *max_alignment)
 {
   STRING_BUFFER* line1 = string_buff_init(200);
@@ -182,19 +297,9 @@ void align_from_file(gzFile* file,
     }
 
     // Align
-    int score = needleman_wunsch_affine(line1->buff, line2->buff,
-                                        alignment_a, alignment_b,
-                                        sub_matrix,
-                                        gap_open, gap_extend);
-
-    if(print_score)
-    {
-      printf("%s\n%s\nscore: %i\n\n", *alignment_a, *alignment_b, score);
-    }
-    else
-    {
-      printf("%s\n%s\n\n", *alignment_a, *alignment_b);
-    }
+    align(line1->buff, line2->buff, *alignment_a, *alignment_b,
+          sub_matrix, gap_open, gap_extend,
+          print_scores, print_pretty, print_colour);
   }
 }
 
@@ -217,12 +322,10 @@ int main(int argc, char* argv[])
 
     nw_alloc_mem(argv[1], argv[2], &alignment_a, &alignment_b);
 
-    needleman_wunsch_affine(argv[1], argv[2],
-                            &alignment_a, &alignment_b,
-                            nw_simple_sub_matrix,
-                            nw_gap_open_penalty, nw_gap_extend_penalty);
+    align(argv[1], argv[2], alignment_a, alignment_b,
+          nw_simple_sub_matrix, nw_gap_open_penalty, nw_gap_extend_penalty,
+          0, 0, 0);
 
-    printf("%s\n%s\n", alignment_a, alignment_b);
     return 0;
   }
 
@@ -233,13 +336,16 @@ int main(int argc, char* argv[])
   // Set penalty defaults
   int match = nw_match_penalty;
   int mismatch = nw_mismatch_penalty;
-  int gapopen = nw_gap_open_penalty;
-  int gapextend = nw_gap_extend_penalty;
+  int gap_open = nw_gap_open_penalty;
+  int gap_extend = nw_gap_extend_penalty;
 
-  gzFile* file = NULL;
+  char* file_path = NULL;
 
-  char print_score = 0;
+  char print_scores = 0;
+  char print_pretty = 0;
+  char print_colour = 0;
   char read_stdin = 0;
+  char read_pipe = 0;
 
   int argi;
   for(argi = 1; argi < argc; argi++)
@@ -249,11 +355,23 @@ int main(int argc, char* argv[])
       // strcasecmp does case insensitive comparison
       if(strcasecmp(argv[argi], "--printscores") == 0)
       {
-        print_score = 1;
+        print_scores = 1;
+      }
+      else if(strcasecmp(argv[argi], "--pretty") == 0)
+      {
+        print_pretty = 1;
+      }
+      else if(strcasecmp(argv[argi], "--colour") == 0)
+      {
+        print_colour = 1;
       }
       else if(strcasecmp(argv[argi], "--stdin") == 0)
       {
         read_stdin = 1;
+      }
+      else if(strcasecmp(argv[argi], "--pipe") == 0)
+      {
+        read_pipe = 1;
       }
       else if(argi == argc-1)
       {
@@ -276,21 +394,22 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--gapopen") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &gapopen)) {
+        if(!parse_entire_int(argv[argi+1], &gap_open)) {
           print_usage("Invalid gap open score -- must be int");
         }
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--gapextend") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &gapextend)) {
+        if(!parse_entire_int(argv[argi+1], &gap_extend)) {
           print_usage("Invalid gap extend score -- must be int");
         }
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--file") == 0)
       {
-        file = gzopen(argv[argi+1], "r");
+        //file = gzopen(argv[argi+1], "r");
+        file_path = argv[argi+1];
         argi++; // took an argument
       }
       else
@@ -318,6 +437,12 @@ int main(int argc, char* argv[])
     }
   }
   
+  // Check read_stdin and read_pipe aren't both set
+  if(read_stdin && read_pipe)
+  {
+    print_usage("Cannot read from both pipe and STDIN (--stdin or --pipe)");
+  }
+  
   // adjust nw_simple_sub_matrix
   int substitution_matrix[4][4];
   nw_create_sub_matrix(match, mismatch, &substitution_matrix);
@@ -326,23 +451,15 @@ int main(int argc, char* argv[])
 
   char *alignment_a = NULL, *alignment_b = NULL;
   int alignment_max_length;
-  int alignment_score;
 
   if(seq1 != NULL)
   {
     // Align seq1 and seq2
     alignment_max_length = nw_alloc_mem(seq1, seq2, &alignment_a, &alignment_b);
     
-    alignment_score = needleman_wunsch_affine(seq1, seq2,
-                                              &alignment_a, &alignment_b,
-                                              substitution_matrix,
-                                              gapopen, gapextend);
-    
-    printf("%s\n%s\n", alignment_a, alignment_b);
-    
-    if(print_score) {
-      printf("score: %i\n", alignment_score);
-    }
+    align(seq1, seq2, alignment_a, alignment_b,
+          substitution_matrix, gap_open, gap_extend,
+          print_scores, print_pretty, print_colour);
   }
   else
   {
@@ -351,26 +468,28 @@ int main(int argc, char* argv[])
     alignment_b = (char*) malloc((alignment_max_length+1) * sizeof(char));
   }
 
-
-  if(file != NULL)
+  if(file_path != NULL && strcmp(file_path, "-") != 0)
   {
     // read file
-    align_from_file(file, substitution_matrix, gapopen, gapextend, print_score,
+    gzFile* file = gzopen(file_path, "r");
+
+    align_from_file(file, substitution_matrix, gap_open, gap_extend,
+                    print_scores, print_pretty, print_colour,
                     &alignment_a, &alignment_b, &alignment_max_length);
     
     gzclose(file);
   }
 
-  //char piped_data = stdin_is_ready();
-  char piped_data = 0;
+  gzFile* file = NULL;
 
-  if(read_stdin || piped_data)
+  if((file_path != NULL && strcmp(file_path, "-")) || read_pipe)
   {
     // Read from STDIN
     file = gzdopen(fileno(stdin), "r");
     
     // read file
-    align_from_file(file, substitution_matrix, gapopen, gapextend, print_score,
+    align_from_file(file, substitution_matrix, gap_open, gap_extend,
+                    print_scores, print_pretty, print_colour,
                     &alignment_a, &alignment_b, &alignment_max_length);
     
     gzclose(file);

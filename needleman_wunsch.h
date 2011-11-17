@@ -43,7 +43,7 @@ int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b);
 /* Vanilla Needleman Wunsch */
 
 int needleman_wunsch(const char* seq_a, const char* seq_b,
-                     char** result_a, char** result_b,
+                     char* result_a, char* result_b,
                      int similarity_matrix[4][4],
                      const int gap_penalty);
 
@@ -54,7 +54,7 @@ int score_alignment(const char* alignment_a, const char* alignment_b,
 /* Affine Gap Penalty */
 
 int needleman_wunsch_affine(const char* seq_a, const char* seq_b,
-                            char** result_a, char** result_b,
+                            char* result_a, char* result_b,
                             int similarity_matrix[4][4],
                             const int gap_penalty_start,
                             const int gap_penalty_cont);

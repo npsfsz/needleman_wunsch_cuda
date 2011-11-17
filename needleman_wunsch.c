@@ -224,7 +224,7 @@ int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b)
 /* Needleman-Wunsch alignment WITHOUT affine gap penalty scores */
 
 int needleman_wunsch(const char* seq_a, const char* seq_b,
-                     char** result_a, char** result_b,
+                     char* alignment_a, char* alignment_b,
                      int match_penalties[4][4], const int gap_penalty)
 {
   int length_a = strlen(seq_a);
@@ -234,8 +234,8 @@ int needleman_wunsch(const char* seq_a, const char* seq_b,
   int longest_alignment = length_a + length_b;
   
   // Store result in positions passed
-  char *alignment_a = *result_a;
-  char *alignment_b = *result_b;
+  //char *alignment_a = *result_a;
+  //char *alignment_b = *result_b;
 
   int score_width = length_a+1;
   int score_height = length_b+1;
@@ -382,7 +382,7 @@ int needleman_wunsch(const char* seq_a, const char* seq_b,
  * Align with gap start and continue penalties
  */
 int needleman_wunsch_affine(const char* seq_a, const char* seq_b,
-                            char** result_a, char** result_b,
+                            char* alignment_a, char* alignment_b,
                             int match_penalties[4][4], // subsitution penalty matrix
                             const int gap_penalty_start,
                             const int gap_penalty_cont)
@@ -392,7 +392,7 @@ int needleman_wunsch_affine(const char* seq_a, const char* seq_b,
     // Speed up - if gap start and gap extend are the same,
     // no need to call _affine
     return needleman_wunsch(seq_a, seq_b,
-                            result_a, result_b,
+                            alignment_a, alignment_b,
                             match_penalties,
                             gap_penalty_cont);
   }
@@ -423,8 +423,8 @@ int needleman_wunsch_affine(const char* seq_a, const char* seq_b,
   int longest_alignment = length_a + length_b;
   
   // Store result in positions passed
-  char *alignment_a = *result_a;
-  char *alignment_b = *result_b;
+  //char *alignment_a = *result_a;
+  //char *alignment_b = *result_b;
   
   int score_width = length_a+1;
   int score_height = length_b+1;
