@@ -22,14 +22,35 @@
 #ifndef NEEDLEMAN_WUNSCH_HEADER_SEEN
 #define NEEDLEMAN_WUNSCH_HEADER_SEEN
 
-const int nw_match_penalty, nw_mismatch_penalty,
-          nw_gap_open_penalty, nw_gap_extend_penalty;
+#include "uthash.h"
 
-int nw_simple_sub_matrix[4][4];
+typedef struct NW_SCORE NW_SCORE;
+typedef struct NW_SCORING NW_SCORING;
 
-// construct substitution matrix with match/mismatch scores
-void nw_create_sub_matrix(int match, int mismatch, int (*matrix)[4][4]);
-//int[4][4] nw_create_sub_matrix(int match, int mismatch);
+struct NW_SCORE
+{
+  int id; // hash key
+  int swap_score;
+  UT_hash_handle hh; // makes this structure hashable
+};
+
+struct NW_SCORING
+{
+  int gap_open, gap_extend;
+
+  // Turn these on to turn off penalties for gaps at the start/end of alignment
+  char no_start_gap_penalty;
+  char no_end_gap_penalty;
+
+  // If swap_table != NULL, but char->char pair swap is not in the hashtable,
+  // should we use match/mismatch values?
+  char use_match_mismatch;
+  int match, mismatch;
+
+  char case_sensitive;
+
+  NW_SCORE* swap_table;
+};
 
 /* Allocate memory for result */
 
@@ -40,32 +61,33 @@ int nw_alloc_mem(const char* seq_a, const char* seq_b,
 // length is = length_a + length_b
 int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b);
 
-/* Vanilla Needleman Wunsch */
+/* Alignment */
 
-int needleman_wunsch(const char* seq_a, const char* seq_b,
-                     char* result_a, char* result_b,
-                     int similarity_matrix[4][4],
-                     const int gap_penalty);
+int needleman_wunsch(char* seq_a, char* seq_b,
+                     char* alignment_a, char* alignment_b,
+                     NW_SCORING* scoring);
 
-int score_alignment(const char* alignment_a, const char* alignment_b,
-                    int similarity_matrix[4][4],
-                    const int gap_penalty);
+int score_alignment(char* alignment_a, char* alignment_b, NW_SCORING* scoring);
 
-/* Affine Gap Penalty */
+/* Scoring */
 
-int needleman_wunsch_affine(const char* seq_a, const char* seq_b,
-                            char* result_a, char* result_b,
-                            int similarity_matrix[4][4],
-                            const int gap_penalty_start,
-                            const int gap_penalty_cont);
+// Scoring set up
+NW_SCORING* custom_scoring(int num_chars, char* chars, int* scores,
+                           int gap_open, int gap_extend,
+                           char no_start_gap_penalty, char no_end_gap_penalty,
+                           char use_match_mismatch,
+                           int match, int mismatch,
+                           char case_sensitive);
 
-int score_alignment_affine(const char* alignment_a, const char* alignment_b,
-                           int similarity_matrix[4][4],
-                           const int gap_penalty_start,
-                           const int gap_penalty_cont);
+NW_SCORING* simple_scoring(int match, int mismatch, int gap_open, int gap_extend,
+                           char no_start_gap_penalty, char no_end_gap_penalty,
+                           char case_sensitive);
 
-// Private
-
-int _get_base_index(const char b);
+// Some scoring systems
+NW_SCORING* scoring_system_PAM30();
+NW_SCORING* scoring_system_PAM70();
+NW_SCORING* scoring_system_BLOSUM80();
+NW_SCORING* scoring_system_BLOSUM62();
+NW_SCORING* scoring_system_DNA_hybridization();
 
 #endif
