@@ -675,7 +675,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
 #ifdef DEBUG
   printf("END: seq_i: %i; seq_j: %i; first_char %i; longest_alignment %i; length %i;\n",
          seq_i, seq_j, first_char, longest_alignment, alignment_len);
-#endif DEBUG
+#endif
 
   int pos;
   for(pos = 0; pos < alignment_len; pos++)
