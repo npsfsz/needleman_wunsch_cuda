@@ -41,7 +41,7 @@ char* colour_stop = "\033[0m";
 // Defaults
 int nw_match_default = 1;
 int nw_mismatch_default = -2;
-int nw_gap_open_default = -5;
+int nw_gap_open_default = -4;
 int nw_gap_extend_default = -1;
 
 // For this run
@@ -84,7 +84,7 @@ void print_usage(char* err_msg)
   fprintf(stderr, "    --zam                A funky type of output\n");
   fprintf(stderr, "\n");
   fprintf(stderr, " DETAILS:\n");
-  fprintf(stderr, "  * For help chosing scoring, see the README file. \n");
+  fprintf(stderr, "  * For help choosing scoring, see the README file. \n");
   fprintf(stderr, "  * To do alignment without affine gap, set '--gapopen 0'.\n");
   //fprintf(stderr, "  * Scoring files should be matrices, with entries separated\n"
   //                 "   by a single character.\n");

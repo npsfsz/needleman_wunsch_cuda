@@ -86,7 +86,7 @@ usage: ./needleman_wunsch [OPTIONS] [seq1 seq2]
 
     --match <score>      default: 1
     --mismatch <score>   default: -2
-    --gapopen <score>    default: -5
+    --gapopen <score>    default: -4
     --gapextend <score>  default: -1
       Gap (of length N) penalty is: (open+N*extend)
 
@@ -125,6 +125,19 @@ should be increased as one looks at more divergent sequences. A ratio of 0.33
 (1/-2) is best for sequences that are 95% conserved; a ratio of about one (1/-1)
 is best for sequences that are 75% conserved [1].
 - http://www.ncbi.nlm.nih.gov/BLAST/blastcgihelp.shtml#Reward-penalty
+
+NCBI Gap (open, extend) values:
+-5, -2
+-2, -2
+-1, -2
+-0, -2
+-3, -1
+-2, -1
+-1, -1
+
+Our default (for now) are:
+gap_open/gap_extend: (-4,-1)
+match/mismatch: (1,-2)
 
 == Development ==
 
