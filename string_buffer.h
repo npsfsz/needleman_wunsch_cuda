@@ -48,6 +48,7 @@ STRING_BUFFER* string_buff_copy(STRING_BUFFER* sbuf);
 // Useful String functions
 void string_buff_add(STRING_BUFFER* sbuf, const char* txt);
 void string_buff_addn(STRING_BUFFER* sbuf, const char* txt, const t_buf_pos len);
+void string_buff_add_char(STRING_BUFFER* sbuf, const char txt);
 void string_buff_chomp(STRING_BUFFER *sbuf);
 char* string_buff_substr(STRING_BUFFER *sbuf, const t_buf_pos start, const t_buf_pos len);
 void string_buff_to_uppercase(STRING_BUFFER *sbuf);

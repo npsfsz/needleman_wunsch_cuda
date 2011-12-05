@@ -23,7 +23,7 @@
 // Turn on debugging output by defining DEBUG
 //#define DEBUG
 
-#define arr_lookup(arr,width,i,j) arr[((j)*(width)) + (i)]
+#define arr_lookup(arr,width,i,j) arr[((unsigned long)(j)*(width)) + (i)]
 #define MAX_3(x,y,z) ((x) >= (y) && (x) >= (z) ? (x) : ((y) >= (z) ? (y) : (z)))
 #define GENERATE_HASH(a,b) (int)(((int)(a) << 8) | (int)(b))
 
@@ -404,7 +404,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   int score_width = length_a+1;
   int score_height = length_b+1;
   
-  int arr_size = score_width * score_height;
+  unsigned long arr_size = (unsigned long)score_width * score_height;
   
   // 2d array (length_a x length_b)
   // addressing [a][b]
@@ -416,7 +416,25 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   // score having just inserted into seq_a
   int* gap_b_score = (int*) malloc(arr_size * sizeof(int));
   
-  int i, j, index;
+  if(match_score == NULL || gap_a_score == NULL || gap_b_score == NULL)
+  {
+    unsigned long num_of_bytes = arr_size * sizeof(int);
+    fprintf(stderr, "Couldn't allocate enough memory (%lu bytes required)\n",
+            num_of_bytes);
+    
+    #ifdef DEBUG
+    fprintf(stderr, "SeqA length: %i; SeqB length: %i\n", length_a, length_b);
+    fprintf(stderr, "arr_size: %lu; int size: %li\n", arr_size, sizeof(int));
+    #endif
+
+    exit(EXIT_FAILURE);
+  }
+  
+  #ifdef DEBUG
+  printf("Malloc'd score matrices!\n");
+  #endif
+  
+  int i, j;
   
   // [0][0]
   match_score[0] = 0;
@@ -431,24 +449,25 @@ int needleman_wunsch(char* seq_a, char* seq_b,
     // Think carefully about which way round these are
     gap_a_score[i] = INT_MIN;
     gap_b_score[i] = scoring->no_start_gap_penalty ? 0
-                     : scoring->gap_open + i * scoring->gap_extend;
+                     : scoring->gap_open + (long)i * scoring->gap_extend;
   }
   
   // work down first column -> [0][j]
   for(j = 1; j < score_height; j++)
   {
-    index = j*score_width;
+    unsigned long index = (unsigned long)j*score_width;
     match_score[index] = INT_MIN;
     
     // Think carefully about which way round these are
     gap_a_score[index] = scoring->no_start_gap_penalty ? 0
-                         : scoring->gap_open + j * scoring->gap_extend;
+                         : scoring->gap_open + (long)j * scoring->gap_extend;
     gap_b_score[index] = INT_MIN;
   }
   
   // Update Dynamic Programming arrays
   int seq_i, seq_j, sub_penalty;
-  int old_index, new_index;
+  // Addressing array must be done with unsigned long
+  unsigned long old_index, new_index;
 
   for (i = 1; i < score_width; i++)
   {
@@ -461,8 +480,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
       sub_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
       
       // Update match_score[i][j] with position [i-1][j-1]
-      new_index = j*score_width + i;
-      old_index = (j-1)*score_width + (i-1);
+      new_index = (unsigned long)j*score_width + i;
+      old_index = (unsigned long)(j-1)*score_width + (i-1);
       
       // substitution
       match_score[new_index] = MAX_3(match_score[old_index], // continue alignment
@@ -471,7 +490,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
                                      // ^ close gap in seq_b
       
       // Update gap_a_score[i][j] from position [i][j-1]
-      old_index = (j-1)*score_width + i;
+      old_index = (unsigned long)(j-1)*score_width + i;
       
       // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
       // (adding as ints would cause an integer overflow)
@@ -481,7 +500,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
                 (long)gap_b_score[old_index] + scoring->gap_extend + scoring->gap_open);
     
       // Update gap_b_score[i][j] from position [i-1][j]
-      old_index = j*score_width + (i-1);
+      old_index = (unsigned long)j*score_width + (i-1);
       
       gap_b_score[new_index]
         = MAX_3((long)match_score[old_index] + scoring->gap_extend + scoring->gap_open,
@@ -489,7 +508,11 @@ int needleman_wunsch(char* seq_a, char* seq_b,
                 (long)gap_b_score[old_index] + scoring->gap_extend);
     }
   }
-   
+  
+  #ifdef DEBUG
+  printf("Filled score matrices - traceback next\n");
+  #endif
+  
   //
   // Trace back now (score matrices all calculated)
   //
@@ -575,7 +598,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
 #endif
 
   // Hold this value to return later
-  long max_alignment_score = curr_score;
+  int max_alignment_score = curr_score;
   
   // note: longest_alignment = strlen(seq_a) + strlen(seq_b)
   // seq_i is the index of the next char of seq_a to be added (working bckwrds)
@@ -648,6 +671,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
 #endif
     
     // Now figure out which matrix we came from
+    // Use addition as long datatypes to prevent integer overflow
     if((long)prev_match_score + prev_match_penalty == curr_score)
     {
       // Both sequences have a base

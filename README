@@ -1,8 +1,8 @@
 Needleman-Wunsch global alignment
 Isaac Turner <turner.isaac@gmail.com>
-28 Nov 2011
+5 Dec 2011
 
-GNU General Public License (v3 or later)
+GNU General Public License (v3 or later).  See LICENSE file.
 
 == Build ==
 
@@ -170,6 +170,7 @@ align(char* seq1, char* seq2)
 
   printf("seq1: %s\n", alignment_a);
   printf("seq2: %s\n", alignment_b);
+  printf("alignment score: %i\n", score);
 
   // Free memory used to store scoring preferences
   free_nw_scoring(scoring);

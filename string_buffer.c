@@ -143,6 +143,18 @@ void string_buff_addn(STRING_BUFFER* sbuf, const char* txt, const t_buf_pos len)
   sbuf->buff[sbuf->len] = '\0';
 }
 
+void string_buff_add_char(STRING_BUFFER* sbuf, const char c)
+{
+  // plus 1 for '\0'
+  if(sbuf->len + 1 + 1 > sbuf->size)
+  {
+    string_buff_grow(sbuf, sbuf->len + 1 + 1);
+  }
+
+  sbuf->buff[(sbuf->len)++] = c;
+  sbuf->buff[sbuf->len] = '\0';
+}
+
 void string_buff_chomp(STRING_BUFFER *sbuf)
 {
   while(sbuf->len >= 1)

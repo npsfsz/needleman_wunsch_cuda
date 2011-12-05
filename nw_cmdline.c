@@ -47,7 +47,9 @@ int nw_gap_extend_default = -1;
 
 // For this run
 char* cmd;
-char print_colour = 0, print_pretty = 0, print_scores = 0, print_zam = 0;
+char print_colour = 0, print_pretty = 0, print_scores = 0,
+     print_fasta = 0, print_zam = 0;
+
 NW_SCORING* scoring;
 
 void print_usage(char* err_msg)
@@ -80,6 +82,7 @@ void print_usage(char* err_msg)
   fprintf(stderr, "    --freeendgap         No penalty for gap at end of alignment\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "    --printscores        Print optimal alignment scores\n");
+  fprintf(stderr, "    --printfasta         Print fasta header lines\n");
   fprintf(stderr, "    --pretty             Print with a descriptor line\n");
   fprintf(stderr, "    --colour             Print with in colour\n");
   fprintf(stderr, "    --zam                A funky type of output\n");
@@ -97,34 +100,69 @@ void print_usage(char* err_msg)
   exit(EXIT_FAILURE);
 }
 
-// Reads the sequence after the FASTA header line
-// Returns: 1 if read successful, 0 if not
-char read_fasta_sequence(STRING_BUFFER* sbuf, gzFile* file)
+char read_fasta_entry(STRING_BUFFER* header, STRING_BUFFER* sequence,
+                      gzFile* file)
 {
-  // By this point have already read FASTA header line ('>..')
-  // Just need to read sequence
+  string_buff_reset(header);
+  string_buff_reset(sequence);
 
-  int line_first_char = sbuf->len;
-  int read_len = string_buff_readline(sbuf, file);
+  // Read until we have a header line
+  int read_len;
 
-  if(read_len == -1) {
+  do
+  {
+    read_len = string_buff_readline(header, file);
+    string_buff_chomp(header);
+  }
+  while (read_len > 0 && header->len == 0);
+
+  if(read_len <= 0)
+  {
     return 0;
   }
-
-  while(read_len > 0 && sbuf->buff[line_first_char] != '>')
+  else if(header->buff[0] != '>')
   {
-    string_buff_chomp(sbuf);
-    line_first_char = sbuf->len;
-    read_len = string_buff_readline(sbuf, file);
+    fprintf(stderr, "Warning: FASTA header does not begin with '>' ('%s')\n",
+            header->buff);
   }
 
-  if(sbuf->buff[line_first_char] == '>')
+  string_buff_chomp(header);
+
+  char success = 0;
+
+  while(1)
   {
-    // Remove '>...' line from buffer
-    string_buff_shrink(sbuf, line_first_char);
-  }
+    int first_char = gzgetc(file);
   
-  return 1;
+    if(first_char == -1)
+    {
+      break;
+    }
+    else if(first_char == '>')
+    {
+      // Push char back onto buffer
+      gzungetc(first_char, file);
+      break;
+    }
+
+    // Push char onto string
+    string_buff_add_char(sequence, first_char);
+    
+    string_buff_chomp(sequence);
+    success = 1;
+
+    if(first_char != '\n' && first_char != '\r')
+    {
+      // Read the rest of the line
+      if(string_buff_readline(sequence, file) < 0) {
+        break;
+      }
+
+      string_buff_chomp(sequence);
+    }
+  }
+
+  return success;
 }
 
 void colour_print_alignment_against(char *alignment_a, char *alignment_b)
@@ -232,7 +270,8 @@ void align_zam(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
   printf("%i %i\n\n", num_of_mismatches, num_of_indels);
 }
 
-void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
+void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
+           char *seq_a_name, char *seq_b_name)
 {
   if(print_zam)
   {
@@ -240,6 +279,16 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
   }
 
   int score = needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
+
+  if(print_fasta && seq_a_name != NULL)
+  {
+    printf("%s\n", seq_a_name);
+  }
+
+  if(print_fasta && print_pretty && seq_b_name != NULL)
+  {
+    printf("%s\n", seq_b_name);
+  }
 
   if(print_colour)
   {
@@ -275,6 +324,10 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
     
     printf("\n");
   }
+  else if(print_fasta && seq_b_name != NULL)
+  {
+    printf("%s\n", seq_b_name);
+  }
 
   if(print_colour)
   {
@@ -297,27 +350,34 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
 void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
                      int *max_alignment)
 {
-  STRING_BUFFER* line1 = string_buff_init(200);
-  STRING_BUFFER* line2 = string_buff_init(200);
+
+  STRING_BUFFER *entry1_header = NULL, *entry2_header = NULL;
+  STRING_BUFFER* entry1_seq = string_buff_init(200);
+  STRING_BUFFER* entry2_seq = string_buff_init(200);
   
   // Read first line
   char is_fasta = 0;
   int first_char = gzgetc(file);
   
-  if(first_char == -1) {
+  if(first_char == -1)
+  {
+    fprintf(stderr, "Warning: empty sequence file\n");
     return;
   }
   else if(first_char == '>')
   {
     // Reading FASTA
     is_fasta = 1;
-    string_buff_readline(line1, file);
+    
+    entry1_header = string_buff_init(200);
+    entry2_header = string_buff_init(200);
   }
   else {
     is_fasta = 0;
-    // Put char back
-    gzungetc(first_char, file);
   }
+
+  // Put char back
+  gzungetc(first_char, file);
 
   char reading = 1;
 
@@ -325,17 +385,14 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
   {
     if(is_fasta)
     {
-      string_buff_reset(line1);
-      string_buff_reset(line2);
-
-      reading = read_fasta_sequence(line1, file);
+      reading = read_fasta_entry(entry1_header, entry1_seq, file);
       
       if(!reading)
       {
         break;
       }
       
-      reading = read_fasta_sequence(line2, file);
+      reading = read_fasta_entry(entry2_header, entry2_seq, file);
 
       if(!reading)
       {
@@ -344,7 +401,7 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
     }
     else
     {
-      int bases_read = string_buff_reset_readline(line1, file);
+      int bases_read = string_buff_reset_readline(entry1_seq, file);
 
       if(bases_read == -1)
       {
@@ -352,7 +409,7 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
         break;
       }
       
-      bases_read = string_buff_reset_readline(line2, file);
+      bases_read = string_buff_reset_readline(entry2_seq, file);
       
       if(bases_read == -1)
       {
@@ -361,12 +418,12 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
         break;
       }
       
-      string_buff_chomp(line1);
-      string_buff_chomp(line2);
+      string_buff_chomp(entry1_seq);
+      string_buff_chomp(entry2_seq);
     }
 
     // Check memory
-    int new_max_alignment = line1->len + line2->len;
+    int new_max_alignment = entry1_seq->len + entry2_seq->len;
 
     if(new_max_alignment > *max_alignment)
     {
@@ -376,7 +433,26 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
     }
 
     // Align
-    align(line1->buff, line2->buff, *alignment_a, *alignment_b);
+    if(is_fasta)
+    {
+      align(entry1_seq->buff, entry2_seq->buff, *alignment_a, *alignment_b,
+            entry1_header->buff, entry2_header->buff);
+    }
+    else
+    {
+      align(entry1_seq->buff, entry2_seq->buff, *alignment_a, *alignment_b,
+            NULL, NULL);
+    }
+  }
+
+  // Free memory
+  string_buff_free(entry1_seq);
+  string_buff_free(entry2_seq);
+
+  if(is_fasta)
+  {
+    string_buff_free(entry1_header);
+    string_buff_free(entry2_header);
   }
 }
 
@@ -414,7 +490,7 @@ int main(int argc, char* argv[])
                              nw_gap_open_default, nw_gap_extend_default,
                              0, 0, 0);
 
-    align(argv[1], argv[2], alignment_a, alignment_b);
+    align(argv[1], argv[2], alignment_a, alignment_b, NULL, NULL);
 
     return 0;
   }
@@ -477,6 +553,10 @@ int main(int argc, char* argv[])
       else if(strcasecmp(argv[argi], "--printscores") == 0)
       {
         print_scores = 1;
+      }
+      else if(strcasecmp(argv[argi], "--printfasta") == 0)
+      {
+        print_fasta = 1;
       }
       else if(strcasecmp(argv[argi], "--pretty") == 0)
       {
@@ -630,9 +710,9 @@ int main(int argc, char* argv[])
     print_usage("No input specified");
   }
 
-  if(print_zam && (print_pretty || print_scores || print_colour))
+  if(print_zam && (print_pretty || print_scores || print_colour || print_fasta))
   {
-    print_usage("Cannot use --printscore, --pretty or --colour with --zam");
+    print_usage("Cannot use --printscore, --printfasta, --pretty or --colour with --zam");
   }
 
   // Set up scoring now
@@ -703,7 +783,7 @@ int main(int argc, char* argv[])
     // Align seq1 and seq2
     alignment_max_length = nw_alloc_mem(seq1, seq2, &alignment_a, &alignment_b);
     
-    align(seq1, seq2, alignment_a, alignment_b);
+    align(seq1, seq2, alignment_a, alignment_b, NULL, NULL);
   }
   else
   {
