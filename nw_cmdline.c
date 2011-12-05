@@ -24,13 +24,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h> // tolower
+#include <ctype.h> // tolower isspace
 
 #include <zlib.h>
 
 #include "utility_lib.h"
 #include "string_buffer.h"
 
+#include "nw_load_scores.h"
 #include "needleman_wunsch.h"
 
 // Printing
@@ -64,16 +65,16 @@ void print_usage(char* err_msg)
   fprintf(stderr, "  OPTIONS:\n");
   fprintf(stderr, "    --file <file>        Sequence file reading with gzip support\n");
   fprintf(stderr, "    --stdin              Read from STDIN (same as '--file -')\n");
+  fprintf(stderr, "    --case_sensitive     Case sensitive character comparison\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n");
-  fprintf(stderr, "    --case_sensitive     Case sensitive matching\n");
-  //fprintf(stderr, "    --scoring_file <file> see details for formating\n"); //coming soon
+  fprintf(stderr, "    --substitution_matrix <file>  see details for formatting\n");
+  fprintf(stderr, "    --substitution_pairs <file>   see details for formatting\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "    --match <score>      default: %i\n", nw_match_default);
   fprintf(stderr, "    --mismatch <score>   default: %i\n", nw_mismatch_default);
   fprintf(stderr, "    --gapopen <score>    default: %i\n", nw_gap_open_default);
   fprintf(stderr, "    --gapextend <score>  default: %i\n", nw_gap_extend_default);
-  fprintf(stderr, "      Gap (of length N) penalty is: (open+N*extend)\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "    --freestartgap       No penalty for gap at start of alignment\n");
   fprintf(stderr, "    --freeendgap         No penalty for gap at end of alignment\n");
@@ -85,9 +86,11 @@ void print_usage(char* err_msg)
   fprintf(stderr, "\n");
   fprintf(stderr, " DETAILS:\n");
   fprintf(stderr, "  * For help choosing scoring, see the README file. \n");
+  fprintf(stderr, "  * Gap (of length N) penalty is: (open+N*extend)\n");
   fprintf(stderr, "  * To do alignment without affine gap, set '--gapopen 0'.\n");
-  //fprintf(stderr, "  * Scoring files should be matrices, with entries separated\n"
-  //                 "   by a single character.\n");
+  fprintf(stderr, "  * Scoring files should be matrices, with entries separated\n"
+                  "    by a single character or whitespace.  See files in the\n"
+                  "    'scores' directory for examples.\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "  turner.isaac@gmail.com  28 Nov 2011\n");
 
@@ -408,7 +411,8 @@ int main(int argc, char* argv[])
 
     // set up scoring (zeros are to penalise gaps everwhere)
     scoring = simple_scoring(nw_match_default, nw_mismatch_default,
-                             nw_gap_open_default, nw_gap_extend_default, 0, 0, 0);
+                             nw_gap_open_default, nw_gap_extend_default,
+                             0, 0, 0);
 
     align(argv[1], argv[2], alignment_a, alignment_b);
 
@@ -438,7 +442,18 @@ int main(int argc, char* argv[])
 
   char case_sensitive = 0;
 
+  // case sensitive needs to be dealt with first
+  // (is is used to construct hash table for swap_table)
   int argi;
+  for(argi = 1; argi < argc; argi++)
+  {
+    if(strcasecmp(argv[argi], "--case_sensitive") == 0)
+    {
+      case_sensitive = 1;
+      break;
+    }
+  }
+
   for(argi = 1; argi < argc; argi++)
   {
     if(argv[argi][0] == '-')
@@ -456,7 +471,8 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--case_sensitive") == 0)
       {
-        case_sensitive = 1;
+        // Already dealt with
+        //case_sensitive = 1;
       }
       else if(strcasecmp(argv[argi], "--printscores") == 0)
       {
@@ -506,8 +522,42 @@ int main(int argc, char* argv[])
           scoring = scoring_system_DNA_hybridization();
         }
         else {
-          print_usage("Unknown --scoring argument");
+          print_usage("Unknown --scoring choice, not one of PAM30|PAM70|BLOSUM80|BLOSUM62");
         }
+
+        argi++; // took an argument
+      }
+      else if(strcasecmp(argv[argi], "--substitution_matrix") == 0)
+      {
+        if(scoring == NULL)
+        {
+          scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
+                                   no_start_gap_penalty, no_end_gap_penalty,
+                                   case_sensitive);
+        
+          scoring->use_match_mismatch = 0;
+        }
+      
+        gzFile* sub_matrix_file = gzopen(argv[argi+1], "r");
+        load_matrix_scores(sub_matrix_file, scoring, case_sensitive, argv[argi+1]);
+        gzclose(sub_matrix_file);
+
+        argi++; // took an argument
+      }
+      else if(strcasecmp(argv[argi], "--substitution_pairs") == 0)
+      {
+        if(scoring == NULL)
+        {
+          scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
+                                   no_start_gap_penalty, no_end_gap_penalty,
+                                   case_sensitive);
+        
+          scoring->use_match_mismatch = 0;
+        }
+      
+        gzFile* sub_pairs_file = gzopen(argv[argi+1], "r");
+        load_pairwise_scores(sub_pairs_file, scoring, case_sensitive, argv[argi+1]);
+        gzclose(sub_pairs_file);
 
         argi++; // took an argument
       }
@@ -559,7 +609,7 @@ int main(int argc, char* argv[])
       break;
     }
   }
-  
+
   // Check for extra unused arguments
   // and set seq1 and seq2 if they have been passed
   if(argi < argc)
@@ -605,10 +655,18 @@ int main(int argc, char* argv[])
       scoring->mismatch = mismatch;
     }
     
-    if(use_match && use_mismatch)
+    if(use_match != use_mismatch)
+    {
+      print_usage("--match --mismatch must both be set or neither set");
+    }
+    else if(use_match && use_mismatch)
     {
       scoring->use_match_mismatch = 1;
     }
+    else {
+      scoring->use_match_mismatch = 0;
+    }
+
     
     if(use_gap_open)
     {
@@ -632,6 +690,10 @@ int main(int argc, char* argv[])
     
     scoring->case_sensitive = case_sensitive;
   }
+
+  // End of set up
+
+  // Align!
 
   char *alignment_a = NULL, *alignment_b = NULL;
   int alignment_max_length;
@@ -678,6 +740,9 @@ int main(int argc, char* argv[])
   // Free memory
   free(alignment_a);
   free(alignment_b);
+
+  // Scoring also needs to be freed
+  free_nw_scoring(scoring);
 
   return 0;
 }

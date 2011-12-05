@@ -21,8 +21,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h> // isspace
 
-#include <sys/select.h>
+#include <sys/select.h> // used in stdin_is_ready()
 
 #include "utility_lib.h"
 
@@ -59,6 +60,25 @@ int int_cmp(const void *aa, const void *bb)
   return (*a < *b) ? -1 : (*a > *b);
 }
 
+// Convert an int to readable binary
+char* int_to_binary(int x)
+{
+  char *b = (char*)malloc(sizeof(char)*33);
+  char *p = b;
+
+  int z;
+  // 2^15 = 32 768
+  // 2^31 = 2 147 483 648 = 0x80000000
+  for (z = 0x80000000; z > 0; z >>= 1)
+  {
+    *p++ = (x & z) ? '1' : '0';
+  }
+
+  *p = '\0';
+
+  return b;
+}
+
 
 // Checks if anything is piping in
 int stdin_is_ready()
@@ -72,4 +92,19 @@ int stdin_is_ready()
   timeout.tv_usec = 1; // was 0
     
   return select(1, &fdset, NULL, NULL, &timeout) == 1 ? 1 : 0;
+}
+
+char string_is_all_whitespace(char* s)
+{
+  int i;
+
+  for(i = 0; s[i] != '\0'; i++)
+  {
+    if(!isspace(s[i]))
+    {
+      return 0;
+    }
+  }
+
+  return 1;
 }

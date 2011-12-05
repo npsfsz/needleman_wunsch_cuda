@@ -72,16 +72,14 @@ int score_alignment(char* alignment_a, char* alignment_b, NW_SCORING* scoring);
 /* Scoring */
 
 // Scoring set up
-NW_SCORING* custom_scoring(int num_chars, char* chars, int* scores,
-                           int gap_open, int gap_extend,
-                           char no_start_gap_penalty, char no_end_gap_penalty,
-                           char use_match_mismatch,
-                           int match, int mismatch,
-                           char case_sensitive);
+//void add_pair_to_scoring(NW_SCORE** hashtable, char a, char b, int score);
+void add_pair_to_scoring(NW_SCORING* scoring, char a, char b, int score);
 
 NW_SCORING* simple_scoring(int match, int mismatch, int gap_open, int gap_extend,
                            char no_start_gap_penalty, char no_end_gap_penalty,
                            char case_sensitive);
+
+void free_nw_scoring(NW_SCORING* scoring);
 
 // Some scoring systems
 NW_SCORING* scoring_system_PAM30();

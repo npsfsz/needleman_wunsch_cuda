@@ -1,9 +1,12 @@
 /*
- utility_lib.h
- project: utility library
+ nw_load_scores.c
+ project: NeedlemanWunsch
  author: Isaac Turner <isaac.turner@dtc.ox.ac.uk>
- Copyright (C) 7-Nov-2011
+ Copyright (C) 29-Nov-2011
  
+ see: README
+
+ == License
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or
@@ -18,24 +21,10 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef UTILITY_HEADER_SEEN
-#define UTILITY_HEADER_SEEN
+#include "needleman_wunsch.h"
 
-// parse an int value - exit with some error message if invalid value
-long parse_int(char* c, char* err);
+void load_matrix_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive,
+                        char* file_path);
 
-// Returns 1 if whole string is int, 0 otherwise
-char parse_entire_int(char *str, int *result);
-
-// Sort comparison function on int
-int int_cmp(const void *aa, const void *bb);
-
-// Convert an int to readable binary
-char* int_to_binary(int x);
-
-// Checks if anything is piping in
-int stdin_is_ready();
-
-char string_is_all_whitespace(char* s);
-
-#endif
+void load_pairwise_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive,
+                          char* file_path);

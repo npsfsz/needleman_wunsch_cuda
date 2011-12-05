@@ -139,10 +139,49 @@ Our default (for now) are:
 gap_open/gap_extend: (-4,-1)
 match/mismatch: (1,-2)
 
+== Use Needleman-Wunsch alignment in your own code ==
+
+Use the code below and include needleman_wunsch.c in your compile command:
+
+#include "needleman_wunsch.h"
+
+align(char* seq1, char* seq2)
+{
+  // Variables to store alignment result
+  char *alignment_a, *alignment_b;
+
+  // malloc the above variables
+  // (seq1 and seq2 are used to figure out how much memory may be needed)
+  nw_alloc_mem(seq1, seq2, &alignment_a, &alignment_b);
+
+  scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
+                           no_start_gap_penalty, no_end_gap_penalty,
+                           case_sensitive);
+
+  // Add some special cases
+  // x -> y means x in seq1 changing to y in seq2
+  add_pair_to_scoring(scoring, 'a', 'c', -2); // a -> c give substitution score -2
+  add_pair_to_scoring(scoring, 'c', 'a', -1); // c -> a give substitution score -1
+
+  // Don't allow cases not given as special cases
+  scoring->use_match_mismatch = 0;
+
+  int score = needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
+
+  printf("seq1: %s\n", alignment_a);
+  printf("seq2: %s\n", alignment_b);
+
+  // Free memory used to store scoring preferences
+  free_nw_scoring(scoring);
+
+  free(alignment_a);
+  free(alignment_b);
+}
+
 == Development ==
 
 Short term goals:
-- reading in of different scoring systems
+- none - suggest some!
 
 Long term goals:
 - allow inversions
