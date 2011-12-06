@@ -1,8 +1,10 @@
 /*
  utility_lib.h
  project: utility library
- author: Isaac Turner <isaac.turner@dtc.ox.ac.uk>
- Copyright (C) 7-Nov-2011
+ project: NeedlemanWunsch
+ author: Isaac Turner <turner.isaac@gmail.com>
+ url: http://sourceforge.net/projects/needlemanwunsch
+ Copyright (C) 06-Dec-2011
  
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by

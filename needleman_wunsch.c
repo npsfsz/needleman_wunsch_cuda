@@ -1,8 +1,9 @@
 /*
  needleman_wunsch.c
  project: NeedlemanWunsch
- author: Isaac Turner <isaac.turner@dtc.ox.ac.uk>
- Copyright (C) 25-May-2011
+ author: Isaac Turner <turner.isaac@gmail.com>
+ url: http://sourceforge.net/projects/needlemanwunsch
+ Copyright (C) 06-Dec-2011
 
  see README
 

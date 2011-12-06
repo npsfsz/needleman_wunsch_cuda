@@ -1,4 +1,5 @@
 Needleman-Wunsch global alignment
+http://sourceforge.net/projects/needlemanwunsch
 Isaac Turner <turner.isaac@gmail.com>
 6 Dec 2011
 
@@ -15,8 +16,6 @@ Baiscs:
 isaac$ ./needleman_wunsch CAGACGT CGATA
 CAGACGT
 C--GATA
-isaac$
-
 
 Print alignment scores:
 
@@ -24,12 +23,10 @@ isaac$ ./needleman_wunsch --printscores CAGACGT CGATA
 CAGACGT
 C--GATA
 score: -15
-isaac$
-
 
 Read from file:
 
-dna.fa contains:
+--- dna.fa file --
 >seqA
 ACAATAGAC
 >seqB
@@ -40,7 +37,7 @@ CAGAT
 >seqD
 GTGGACG
 AGTA
-isaac$
+-----------------
 
 isaac$ ./needleman_wunsch --printscores --file dna.fa.gz
 AC-AATAGAC
@@ -61,17 +58,18 @@ ACGAATAGAT
 ACGTGACAGAT
 GTGGACGAGTA
 
-or:
+is the same as:
 isaac$ gzip -d -c dna.fa.gz | ./needleman_wunsch --file -
-(gives same output)
 
-Set different scoring systems
+Set different scoring systems:
 
 isaac$ ./needleman_wunsch --match 1 --mismatch 0 --gapopen -10 --gapextend 0 ACGTGCCCCACAGAT AGGTGGACGAGAT
 
-Getting help
+== Getting help ==
 
-isaac$ ./needleman_wunsch 
+Feel free to contact me to request features.  Bug reports are appreciated.  
+
+isaac$ ./needleman_wunsch
 usage: ./needleman_wunsch [OPTIONS] [seq1 seq2]
   Needleman-Wunsch optimal global alignment (maximises score).  
   Takes a pair of sequences on the command line, reads from a
@@ -80,30 +78,35 @@ usage: ./needleman_wunsch [OPTIONS] [seq1 seq2]
   OPTIONS:
     --file <file>        Sequence file reading with gzip support
     --stdin              Read from STDIN (same as '--file -')
+    --case_sensitive     Case sensitive character comparison
 
     --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>
-    --case_sensitive     Case sensitive matching
+    --substitution_matrix <file>  see details for formatting
+    --substitution_pairs <file>   see details for formatting
 
     --match <score>      default: 1
     --mismatch <score>   default: -2
     --gapopen <score>    default: -4
     --gapextend <score>  default: -1
-      Gap (of length N) penalty is: (open+N*extend)
 
     --freestartgap       No penalty for gap at start of alignment
     --freeendgap         No penalty for gap at end of alignment
 
     --printscores        Print optimal alignment scores
+    --printfasta         Print fasta header lines
     --pretty             Print with a descriptor line
     --colour             Print with in colour
     --zam                A funky type of output
 
  DETAILS:
-  * For help chosing scoring, see the README file. 
+  * For help choosing scoring, see the README file. 
+  * Gap (of length N) penalty is: (open+N*extend)
   * To do alignment without affine gap, set '--gapopen 0'.
+  * Scoring files should be matrices, with entries separated
+    by a single character or whitespace.  See files in the
+    'scores' directory for examples.
 
-  turner.isaac@gmail.com  28 Nov 2011
-isaac$
+  turner.isaac@gmail.com  06 Dec 2011
 
 == Scoring systems ==
 
@@ -124,7 +127,7 @@ should be increased as one looks at more divergent sequences. A ratio of 0.33
 (1/-3) is appropriate for sequences that are about 99% conserved; a ratio of 0.5
 (1/-2) is best for sequences that are 95% conserved; a ratio of about one (1/-1)
 is best for sequences that are 75% conserved [1].
-- http://www.ncbi.nlm.nih.gov/BLAST/blastcgihelp.shtml#Reward-penalty
+[from: http://www.ncbi.nlm.nih.gov/BLAST/blastcgihelp.shtml#Reward-penalty]
 
 NCBI Gap (open, extend) values:
 -5, -2

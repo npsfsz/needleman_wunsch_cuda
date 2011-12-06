@@ -1,8 +1,9 @@
 /*
  nw_cmdline.c
  project: NeedlemanWunsch
- author: Isaac Turner <isaac.turner@dtc.ox.ac.uk>
- Copyright (C) 6-Nov-2011
+ author: Isaac Turner <turner.isaac@gmail.com>
+ url: http://sourceforge.net/projects/needlemanwunsch
+ Copyright (C) 06-Dec-2011
  
  see: README
 
@@ -95,7 +96,7 @@ void print_usage(char* err_msg)
                   "    by a single character or whitespace.  See files in the\n"
                   "    'scores' directory for examples.\n");
   fprintf(stderr, "\n");
-  fprintf(stderr, "  turner.isaac@gmail.com  28 Nov 2011\n");
+  fprintf(stderr, "  turner.isaac@gmail.com  06 Dec 2011\n");
 
   exit(EXIT_FAILURE);
 }
