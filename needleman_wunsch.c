@@ -404,6 +404,14 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   int score_width = length_a+1;
   int score_height = length_b+1;
   
+  // Check sequences aren't too long to align
+  if(score_height > ULONG_MAX / score_width)
+  {
+    fprintf(stderr, "Error: sequences too long to align (%i * %i > %lu)\n",
+            score_width, score_height, ULONG_MAX);
+    exit(EXIT_FAILURE);
+  }
+  
   unsigned long arr_size = (unsigned long)score_width * score_height;
   
   // 2d array (length_a x length_b)
@@ -464,24 +472,24 @@ int needleman_wunsch(char* seq_a, char* seq_b,
     gap_b_score[index] = INT_MIN;
   }
   
+  //
   // Update Dynamic Programming arrays
-  int seq_i, seq_j, sub_penalty;
-  // Addressing array must be done with unsigned long
-  unsigned long old_index, new_index;
+  //
 
   for (i = 1; i < score_width; i++)
   {
     for (j = 1; j < score_height; j++)
     {
       // It's an indexing thing...
-      seq_i = i - 1;
-      seq_j = j - 1;
+      int seq_i = i - 1;
+      int seq_j = j - 1;
       
-      sub_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
+      int sub_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
       
       // Update match_score[i][j] with position [i-1][j-1]
-      new_index = (unsigned long)j*score_width + i;
-      old_index = (unsigned long)(j-1)*score_width + (i-1);
+      // Addressing array must be done with unsigned long
+      unsigned long new_index = (unsigned long)j*score_width + i;
+      unsigned long old_index = (unsigned long)(j-1)*score_width + (i-1);
       
       // substitution
       match_score[new_index] = MAX_3(match_score[old_index], // continue alignment
@@ -518,7 +526,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   //
   
   // work backwards re-tracing optimal alignment, then shift sequences into place
-  
+  int seq_i, seq_j;
   char curr_matrix;
   int curr_score;
   
@@ -535,6 +543,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   {
     curr_matrix = MATCH;
     curr_score = arr_lookup(match_score, score_width, score_width-1, 0);
+    seq_i = length_a - 1;
+    seq_j = length_b - 1;
     
     find_end_max(match_score, length_a, length_b,
                  &curr_score, &seq_i, &seq_j);
