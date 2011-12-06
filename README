@@ -190,7 +190,7 @@ void align(char* seq_a, char* seq_b)
   add_pair_to_scoring(scoring, 'c', 'a', -1); // c -> a give substitution score -1
 
   // We could also prohibit the aligning of characters not given as special cases
-  // scoring->use_match_mismatch = 1;
+  // scoring->use_match_mismatch = 0;
 
   int score = needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
 
