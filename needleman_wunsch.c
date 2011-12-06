@@ -662,7 +662,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
         break;
 
       default:
-        fprintf(stderr, "Err: invalid matrix number\n");
+        fprintf(stderr, "Program error: invalid matrix number\n");
+        fprintf(stderr, "Please submit a bug report to: turner.isaac@gmail.com\n");
         exit(EXIT_FAILURE);
     }
     
@@ -703,7 +704,13 @@ int needleman_wunsch(char* seq_a, char* seq_b,
     }
     else
     {
-      fprintf(stderr, "Fail\n");
+      fprintf(stderr, "Program error: traceback fail\n");
+      fprintf(stderr, "This may be due to an integer overflow if your "
+                      "sequences are long or if scores are large.  \n");
+      fprintf(stderr, "If this is the case using smaller scores or "
+                      "shorter sequences may work around this problem.  \n");
+      fprintf(stderr, " If you think this is a bug, please report it to: "
+                      "turner.isaac@gmail.com\n");
       exit(EXIT_FAILURE);
     }
   }
