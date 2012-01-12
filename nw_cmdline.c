@@ -436,11 +436,13 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
     // Align
     if(is_fasta)
     {
+      // Sequences from FASTA files have names!
       align(entry1_seq->buff, entry2_seq->buff, *alignment_a, *alignment_b,
             entry1_header->buff, entry2_header->buff);
     }
     else
     {
+      // Sequences have no names
       align(entry1_seq->buff, entry2_seq->buff, *alignment_a, *alignment_b,
             NULL, NULL);
     }
@@ -497,27 +499,14 @@ int main(int argc, char* argv[])
   }
 
   char *seq1 = NULL, *seq2 = NULL;
-  
-  scoring = NULL;
-  
-  // Set penalty defaults
-  int match = nw_match_default;
-  int mismatch = nw_mismatch_default;
-  int gap_open = nw_gap_open_default;
-  int gap_extend = nw_gap_extend_default;
-
-  char no_start_gap_penalty = 0, no_end_gap_penalty = 0;
-
-  // Indicates which of the above parameters have been set on the command line
-  // This is required because --scoring may be specified after and
-  // you don't want to lose the specified values
-  char use_match = 0, use_mismatch = 0, use_gap_open = 0, use_gap_extend = 0;
-  char use_no_start_gap_penalty = 0, use_no_end_gap_penalty = 0;
 
   char* file_path = NULL;
   char read_stdin = 0;
 
+  scoring = NULL;
   char case_sensitive = 0;
+  
+  // First run through arguments to set up case_sensitive and scoring system
 
   // case sensitive needs to be dealt with first
   // (is is used to construct hash table for swap_table)
@@ -527,9 +516,55 @@ int main(int argc, char* argv[])
     if(strcasecmp(argv[argi], "--case_sensitive") == 0)
     {
       case_sensitive = 1;
-      break;
+    }
+    else if(strcasecmp(argv[argi], "--scoring") == 0)
+    {
+      if(scoring != NULL)
+      {
+        print_usage("More than one scoring system specified - not permitted");
+      }
+    
+      if(strcasecmp(argv[argi+1], "PAM30") == 0)
+      {
+        scoring = scoring_system_PAM30();
+      }
+      else if(strcasecmp(argv[argi+1], "PAM70") == 0)
+      {
+        scoring = scoring_system_PAM70();
+      }
+      else if(strcasecmp(argv[argi+1], "BLOSUM80") == 0)
+      {
+        scoring = scoring_system_BLOSUM80();
+      }
+      else if(strcasecmp(argv[argi+1], "BLOSUM62") == 0)
+      {
+        scoring = scoring_system_BLOSUM62();
+      }
+      else if(strcasecmp(argv[argi+1], "DNA_HYBRIDIZATION") == 0)
+      {
+        scoring = scoring_system_DNA_hybridization();
+      }
+      else {
+        print_usage("Unknown --scoring choice, not one of "
+                    "PAM30|PAM70|BLOSUM80|BLOSUM62");
+      }
+
+      argi++; // took an argument
     }
   }
+
+  // Set up default scoring now
+  if(scoring == NULL)
+  {
+    scoring = simple_scoring(nw_match_default, nw_mismatch_default,
+                             nw_gap_open_default, nw_gap_extend_default,
+                             0, 0,0);
+  }
+
+  // Keep track of what is set
+  char substitutions_set = 0;
+  char match_set = 0;
+  char mismatch_set = 0;
 
   for(argi = 1; argi < argc; argi++)
   {
@@ -538,13 +573,11 @@ int main(int argc, char* argv[])
       // strcasecmp does case insensitive comparison
       if(strcasecmp(argv[argi], "--freestartgap") == 0)
       {
-        no_start_gap_penalty = 1;
-        use_no_start_gap_penalty = 1;
+        scoring->no_start_gap_penalty = 1;
       }
       else if(strcasecmp(argv[argi], "--freeendgap") == 0)
       {
-        no_end_gap_penalty = 1;
-        use_no_end_gap_penalty = 1;
+        scoring->no_end_gap_penalty = 1;
       }
       else if(strcasecmp(argv[argi], "--case_sensitive") == 0)
       {
@@ -582,96 +615,55 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--scoring") == 0)
       {
-        if(strcasecmp(argv[argi+1], "PAM30") == 0)
-        {
-          scoring = scoring_system_PAM30();
-        }
-        else if(strcasecmp(argv[argi+1], "PAM70") == 0)
-        {
-          scoring = scoring_system_PAM70();
-        }
-        else if(strcasecmp(argv[argi+1], "BLOSUM80") == 0)
-        {
-          scoring = scoring_system_BLOSUM80();
-        }
-        else if(strcasecmp(argv[argi+1], "BLOSUM62") == 0)
-        {
-          scoring = scoring_system_BLOSUM62();
-        }
-        else if(strcasecmp(argv[argi+1], "DNA_HYBRIDIZATION") == 0)
-        {
-          scoring = scoring_system_DNA_hybridization();
-        }
-        else {
-          print_usage("Unknown --scoring choice, not one of PAM30|PAM70|BLOSUM80|BLOSUM62");
-        }
-
+        // This handled above
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--substitution_matrix") == 0)
       {
-        if(scoring == NULL)
-        {
-          scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
-                                   no_start_gap_penalty, no_end_gap_penalty,
-                                   case_sensitive);
-        
-          scoring->use_match_mismatch = 0;
-        }
-      
         gzFile* sub_matrix_file = gzopen(argv[argi+1], "r");
         load_matrix_scores(sub_matrix_file, scoring, case_sensitive, argv[argi+1]);
         gzclose(sub_matrix_file);
+        substitutions_set = 1;
 
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--substitution_pairs") == 0)
       {
-        if(scoring == NULL)
-        {
-          scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
-                                   no_start_gap_penalty, no_end_gap_penalty,
-                                   case_sensitive);
-        
-          scoring->use_match_mismatch = 0;
-        }
-      
         gzFile* sub_pairs_file = gzopen(argv[argi+1], "r");
         load_pairwise_scores(sub_pairs_file, scoring, case_sensitive, argv[argi+1]);
         gzclose(sub_pairs_file);
+        substitutions_set = 1;
 
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--match") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &match)) {
+        if(!parse_entire_int(argv[argi+1], &scoring->match)) {
           print_usage("Invalid match -- must be int");
         }
-        use_match = 1;
+        match_set = 1;
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--mismatch") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &mismatch)) {
+        if(!parse_entire_int(argv[argi+1], &scoring->mismatch)) {
           print_usage("Invalid mismatch score -- must be int");
         }
-        use_mismatch = 1;
+        mismatch_set = 1;
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--gapopen") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &gap_open)) {
+        if(!parse_entire_int(argv[argi+1], &scoring->gap_open)) {
           print_usage("Invalid gap open score -- must be int");
         }
-        use_gap_open = 1;
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--gapextend") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &gap_extend)) {
+        if(!parse_entire_int(argv[argi+1], &scoring->gap_extend)) {
           print_usage("Invalid gap extend score -- must be int");
         }
-        use_gap_extend = 1;
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--file") == 0)
@@ -689,6 +681,16 @@ int main(int argc, char* argv[])
     else {
       break;
     }
+  }
+
+  if(match_set != mismatch_set)
+  {
+    print_usage("--match --mismatch must both be set or neither set");
+  }
+  else if(substitutions_set && !match_set)
+  {
+    // if substitution table set and not match/mismatch
+    scoring->use_match_mismatch = 0;
   }
 
   // Check for extra unused arguments
@@ -713,63 +715,8 @@ int main(int argc, char* argv[])
 
   if(print_zam && (print_pretty || print_scores || print_colour || print_fasta))
   {
-    print_usage("Cannot use --printscore, --printfasta, --pretty or --colour with --zam");
-  }
-
-  // Set up scoring now
-  if(scoring == NULL)
-  {
-    scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
-                             no_start_gap_penalty, no_end_gap_penalty,
-                             case_sensitive);
-  }
-  else
-  {
-    // Update existing chosen scoring scheme
-    if(use_match)
-    {
-      scoring->match = match;
-    }
-    
-    if(use_mismatch)
-    {
-      scoring->mismatch = mismatch;
-    }
-    
-    if(use_match != use_mismatch)
-    {
-      print_usage("--match --mismatch must both be set or neither set");
-    }
-    else if(use_match && use_mismatch)
-    {
-      scoring->use_match_mismatch = 1;
-    }
-    else {
-      scoring->use_match_mismatch = 0;
-    }
-
-    
-    if(use_gap_open)
-    {
-      scoring->gap_open = gap_open;
-    }
-    
-    if(use_gap_extend)
-    {
-      scoring->gap_extend = gap_extend;
-    }
-    
-    if(use_no_start_gap_penalty)
-    {
-      scoring->no_start_gap_penalty = no_start_gap_penalty;
-    }
-    
-    if(use_no_end_gap_penalty)
-    {
-      scoring->no_end_gap_penalty = no_end_gap_penalty;
-    }
-    
-    scoring->case_sensitive = case_sensitive;
+    print_usage("Cannot use --printscore, --printfasta, --pretty or --colour "
+                "with --zam");
   }
 
   // End of set up

@@ -21,37 +21,35 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Turn on debugging output by defining DEBUG
-//#define DEBUG
-
-#define arr_lookup(arr,width,i,j) arr[((unsigned long)(j)*(width)) + (i)]
+#define ARR_LOOKUP(arr,width,i,j) arr[((unsigned long)(j)*(width)) + (i)]
 #define MAX_3(x,y,z) ((x) >= (y) && (x) >= (z) ? (x) : ((y) >= (z) ? (y) : (z)))
-#define GENERATE_HASH(a,b) (int)(((int)(a) << 8) | (int)(b))
+#define GENERATE_HASH(a,b) (int)(((int)(a) << 8) | (int)(b)) // needed for scoring
 
+// Matrix names
 #define MATCH 0
 #define GAP_A 1
 #define GAP_B 2
-
-#ifdef DEBUG
-#define MATRIX_NAME(x) ((x) == 0 ? "MATCH" : (\
-                        (x) == 1 ? "GAP_A" : (\
-                        (x) == 2 ? "GAP_B" : (\
-                        "Unknown matrix"))))
-#endif
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h> // tolower
 
-// DEBUG
+#include <limits.h> // INT_MIN
+
 #ifdef DEBUG
+#undef INT_MIN
 #define INT_MIN -99
-#else
-#include <limits.h>
+
+#define MATRIX_NAME(x) ((x) == 0 ? "MATCH" : (\
+                        (x) == 1 ? "GAP_A" : (\
+                        (x) == 2 ? "GAP_B" : (\
+                        "Unknown matrix"))))
 #endif
 
 #include "needleman_wunsch.h"
+
+/* Scoring */
 
 void add_pair_to_scoring(NW_SCORING* scoring, char a, char b, int score)
 {
@@ -105,7 +103,7 @@ NW_SCORING* custom_scoring(int num_chars, char* chars, int* scores,
     for(j = 0; j < num_chars; j++)
     {
       b = case_sensitive ? chars[j] : tolower(chars[j]);
-      score = arr_lookup(scores,num_chars,i,j);
+      score = ARR_LOOKUP(scores,num_chars,i,j);
 
       add_pair_to_scoring(scoring, a, b, score);
     }
@@ -189,6 +187,8 @@ int score_lookup(NW_SCORING* scoring, char a, char b)
 
   return result->swap_score;
 }
+
+/* End of Scoring */
 
 /*
  * - both strings should be of the same length and end with \0 char
@@ -305,7 +305,7 @@ char find_end_max(int *score_arr, int length_a, int length_b,
 
   for(i = 1; i <= length_a; i++)
   {
-    temp = arr_lookup(score_arr, length_a+1, i, length_b);
+    temp = ARR_LOOKUP(score_arr, length_a+1, i, length_b);
     if(temp > *curr_score)
     {
       *curr_score = temp;
@@ -317,7 +317,7 @@ char find_end_max(int *score_arr, int length_a, int length_b,
 
   for(j = 1; j <= length_b; j++)
   {
-    temp = arr_lookup(score_arr, length_a+1, length_a, j);
+    temp = ARR_LOOKUP(score_arr, length_a+1, length_a, j);
     if(temp > *curr_score)
     {
       *curr_score = temp;
@@ -331,7 +331,9 @@ char find_end_max(int *score_arr, int length_a, int length_b,
 }
 
 #ifdef DEBUG
-void print_scoring(NW_SCORING* scoring)
+
+// Scoring
+void scoring_print(NW_SCORING* scoring)
 {
   printf("scoring:\n");
   printf("  match: %i; mismatch: %i; (use_match_mismatch: %i)\n",
@@ -346,6 +348,7 @@ void print_scoring(NW_SCORING* scoring)
   printf("  swap_table: %i\n", (scoring->swap_table == NULL));
 }
 
+
 void print_matrices(int* match_score, int* gap_a_score, int* gap_b_score,
                     int length_a, int length_b)
 {
@@ -358,7 +361,7 @@ void print_matrices(int* match_score, int* gap_a_score, int* gap_b_score,
     printf("%i:", j);
     for(i = 0; i <= length_a; i++)
     {
-      printf(" %3i", arr_lookup(match_score, score_width, i, j));
+      printf(" %3i", ARR_LOOKUP(match_score, score_width, i, j));
     }
     printf("\n");
   }
@@ -368,7 +371,7 @@ void print_matrices(int* match_score, int* gap_a_score, int* gap_b_score,
     printf("%i:", j);
     for(i = 0; i <= length_a; i++)
     {
-      printf(" %3i", arr_lookup(gap_a_score, score_width, i, j));
+      printf(" %3i", ARR_LOOKUP(gap_a_score, score_width, i, j));
     }
     printf("\n");
   }
@@ -378,7 +381,7 @@ void print_matrices(int* match_score, int* gap_a_score, int* gap_b_score,
     printf("%i:", j);
     for(i = 0; i <= length_a; i++)
     {
-      printf(" %3i", arr_lookup(gap_b_score, score_width, i, j));
+      printf(" %3i", ARR_LOOKUP(gap_b_score, score_width, i, j));
     }
     printf("\n");
   }
@@ -392,9 +395,9 @@ int needleman_wunsch(char* seq_a, char* seq_b,
                      char* alignment_a, char* alignment_b,
                      NW_SCORING* scoring)
 {
-#ifdef DEBUG
-  print_scoring(scoring);
-#endif
+  #ifdef DEBUG
+  scoring_print(scoring);
+  #endif
 
   int length_a = strlen(seq_a);
   int length_b = strlen(seq_b);
@@ -477,6 +480,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   // Update Dynamic Programming arrays
   //
 
+  int gap_open_penalty = scoring->gap_extend + scoring->gap_open;
+
   for (i = 1; i < score_width; i++)
   {
     for (j = 1; j < score_height; j++)
@@ -485,18 +490,20 @@ int needleman_wunsch(char* seq_a, char* seq_b,
       int seq_i = i - 1;
       int seq_j = j - 1;
       
-      int sub_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
-      
       // Update match_score[i][j] with position [i-1][j-1]
       // Addressing array must be done with unsigned long
       unsigned long new_index = (unsigned long)j*score_width + i;
       unsigned long old_index = (unsigned long)(j-1)*score_width + (i-1);
       
+      // substitution penalty
+      int substitution_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
+
       // substitution
       match_score[new_index] = MAX_3(match_score[old_index], // continue alignment
                                      gap_a_score[old_index], // close gap in seq_a
-                                     gap_b_score[old_index]) + sub_penalty;
-                                     // ^ close gap in seq_b
+                                     gap_b_score[old_index]) // close gap in seq_b
+                               + substitution_penalty;
+                                     
       
       // Update gap_a_score[i][j] from position [i][j-1]
       old_index = (unsigned long)(j-1)*score_width + i;
@@ -504,16 +511,16 @@ int needleman_wunsch(char* seq_a, char* seq_b,
       // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
       // (adding as ints would cause an integer overflow)
       gap_a_score[new_index]
-        = MAX_3((long)match_score[old_index] + scoring->gap_extend + scoring->gap_open,
+        = MAX_3((long)match_score[old_index] + gap_open_penalty,
                 (long)gap_a_score[old_index] + scoring->gap_extend,
-                (long)gap_b_score[old_index] + scoring->gap_extend + scoring->gap_open);
+                (long)gap_b_score[old_index] + gap_open_penalty);
     
       // Update gap_b_score[i][j] from position [i-1][j]
       old_index = (unsigned long)j*score_width + (i-1);
       
       gap_b_score[new_index]
-        = MAX_3((long)match_score[old_index] + scoring->gap_extend + scoring->gap_open,
-                (long)gap_a_score[old_index] + scoring->gap_extend + scoring->gap_open,
+        = MAX_3((long)match_score[old_index] + gap_open_penalty,
+                (long)gap_a_score[old_index] + gap_open_penalty,
                 (long)gap_b_score[old_index] + scoring->gap_extend);
     }
   }
@@ -543,7 +550,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   if(scoring->no_end_gap_penalty)
   {
     curr_matrix = MATCH;
-    curr_score = arr_lookup(match_score, score_width, score_width-1, 0);
+    curr_score = ARR_LOOKUP(match_score, score_width, score_width-1, 0);
     seq_i = length_a - 1;
     seq_j = length_b - 1;
     
@@ -563,7 +570,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
     }
     
     #ifdef DEBUG
-    printf("no_end_gap_penalty: (matrix: %s, curr_score: %i, seq_i: %i, seq_j: %i)\n",
+    printf("no_end_gap_penalty: "
+           "(matrix: %s, curr_score: %i, seq_i: %i, seq_j: %i)\n",
            MATRIX_NAME(curr_matrix), curr_score, seq_i, seq_j);
     #endif
     
@@ -621,7 +629,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
            MATRIX_NAME(curr_matrix), seq_i, seq_j, curr_score);
     #endif
 
-    switch (curr_matrix)
+    switch(curr_matrix)
     {
       case MATCH:
         alignment_a[next_char] = seq_a[seq_i];
@@ -673,9 +681,9 @@ int needleman_wunsch(char* seq_a, char* seq_b,
 
     // [score_i][score_j] is the next position in the score matrices
     
-    prev_match_score = arr_lookup(match_score, score_width, score_i, score_j);
-    prev_gap_a_score = arr_lookup(gap_a_score, score_width, score_i, score_j);
-    prev_gap_b_score = arr_lookup(gap_b_score, score_width, score_i, score_j);
+    prev_match_score = ARR_LOOKUP(match_score, score_width, score_i, score_j);
+    prev_gap_a_score = ARR_LOOKUP(gap_a_score, score_width, score_i, score_j);
+    prev_gap_b_score = ARR_LOOKUP(gap_b_score, score_width, score_i, score_j);
     
 #ifdef DEBUG
     printf("  prev_match_score: %i; prev_gap_a_score: %i; prev_gap_b_score: %i\n",
@@ -743,11 +751,12 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   int alignment_len = longest_alignment - first_char;
 
 #ifdef DEBUG
-  printf("END: seq_i: %i; seq_j: %i; first_char %i; longest_alignment %i; length %i;\n",
+  printf("END: seq_i: %i; seq_j: %i; first_char %i; longest_alignment %i; "
+         "length %i;\n",
          seq_i, seq_j, first_char, longest_alignment, alignment_len);
 #endif
 
-  int pos;
+  /*int pos;
   for(pos = 0; pos < alignment_len; pos++)
   {
     alignment_a[pos] = alignment_a[pos+first_char];
@@ -756,6 +765,14 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   
   alignment_a[pos] = '\0';
   alignment_b[pos] = '\0';
+  */
+  
+  // Use memmove instead
+  memmove(alignment_a, alignment_a+first_char, alignment_len);
+  memmove(alignment_b, alignment_b+first_char, alignment_len);
+
+  alignment_a[alignment_len] = '\0';
+  alignment_b[alignment_len] = '\0';
 
   return max_alignment_score;
 }

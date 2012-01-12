@@ -58,21 +58,6 @@ void loading_error(char* err_msg, char* file_path, int line_num, char is_matrix)
   exit(EXIT_FAILURE);
 }
 
-char* next_nonwhitespace(char* s)
-{
-  while(*s != '\0')
-  {
-    if(!isspace(*s))
-    {
-      return s;
-    }
-
-    s++;
-  }
-
-  return NULL;
-}
-
 void load_matrix_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive,
                         char* file_path)
 {
