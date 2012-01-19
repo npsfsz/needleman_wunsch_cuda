@@ -61,42 +61,50 @@ void print_usage(char* err_msg)
   }
 
   fprintf(stderr, "usage: %s [OPTIONS] [seq1 seq2]\n", cmd);
-  fprintf(stderr, "  Needleman-Wunsch optimal global alignment (maximises score).  \n");
-  fprintf(stderr, "  Takes a pair of sequences on the command line, reads from a\n");
-  fprintf(stderr, "  file and from sequence piped in.  Can read gzip files and FASTA.  \n");
-  fprintf(stderr, "\n");
-  fprintf(stderr, "  OPTIONS:\n");
-  fprintf(stderr, "    --file <file>        Sequence file reading with gzip support\n");
-  fprintf(stderr, "    --stdin              Read from STDIN (same as '--file -')\n");
-  fprintf(stderr, "    --case_sensitive     Case sensitive character comparison\n");
-  fprintf(stderr, "\n");
-  fprintf(stderr, "    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n");
-  fprintf(stderr, "    --substitution_matrix <file>  see details for formatting\n");
-  fprintf(stderr, "    --substitution_pairs <file>   see details for formatting\n");
-  fprintf(stderr, "\n");
-  fprintf(stderr, "    --match <score>      default: %i\n", nw_match_default);
-  fprintf(stderr, "    --mismatch <score>   default: %i\n", nw_mismatch_default);
-  fprintf(stderr, "    --gapopen <score>    default: %i\n", nw_gap_open_default);
-  fprintf(stderr, "    --gapextend <score>  default: %i\n", nw_gap_extend_default);
-  fprintf(stderr, "\n");
-  fprintf(stderr, "    --freestartgap       No penalty for gap at start of alignment\n");
-  fprintf(stderr, "    --freeendgap         No penalty for gap at end of alignment\n");
-  fprintf(stderr, "\n");
-  fprintf(stderr, "    --printscores        Print optimal alignment scores\n");
-  fprintf(stderr, "    --printfasta         Print fasta header lines\n");
-  fprintf(stderr, "    --pretty             Print with a descriptor line\n");
-  fprintf(stderr, "    --colour             Print with in colour\n");
-  fprintf(stderr, "    --zam                A funky type of output\n");
-  fprintf(stderr, "\n");
-  fprintf(stderr, " DETAILS:\n");
-  fprintf(stderr, "  * For help choosing scoring, see the README file. \n");
-  fprintf(stderr, "  * Gap (of length N) penalty is: (open+N*extend)\n");
-  fprintf(stderr, "  * To do alignment without affine gap, set '--gapopen 0'.\n");
-  fprintf(stderr, "  * Scoring files should be matrices, with entries separated\n"
-                  "    by a single character or whitespace.  See files in the\n"
-                  "    'scores' directory for examples.\n");
-  fprintf(stderr, "\n");
-  fprintf(stderr, "  turner.isaac@gmail.com  06 Dec 2011\n");
+
+  fprintf(stderr,
+          "  Needleman-Wunsch optimal global alignment (maximises score).  \n"
+          "  Takes a pair of sequences on the command line, reads from a\n"
+          "  file and from sequence piped in.  Can read gzip files and FASTA.\n"
+          "\n"
+          "  OPTIONS:\n"
+          "    --file <file>        Sequence file reading with gzip support\n"
+          "    --stdin              Read from STDIN (same as '--file -')\n"
+          "    --case_sensitive     Case sensitive character comparison\n"
+          "\n"
+          "    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
+          "    --substitution_matrix <file>  see details for formatting\n"
+          "    --substitution_pairs <file>   see details for formatting\n"
+          "\n");
+
+  fprintf(stderr,
+          "    --match <score>      default: %i\n"
+          "    --mismatch <score>   default: %i\n"
+          "    --gapopen <score>    default: %i\n"
+          "    --gapextend <score>  default: %i\n",
+          nw_match_default, nw_mismatch_default,
+          nw_gap_open_default, nw_gap_extend_default);
+
+  fprintf(stderr,
+          "\n"
+          "    --freestartgap       No penalty for gap at start of alignment\n"
+          "    --freeendgap         No penalty for gap at end of alignment\n"
+          "\n"
+          "    --printscores        Print optimal alignment scores\n"
+          "    --printfasta         Print fasta header lines\n"
+          "    --pretty             Print with a descriptor line\n"
+          "    --colour             Print with colour\n"
+          "    --zam                A funky type of output\n"
+          "\n"
+          " DETAILS:\n"
+          "  * For help choosing scoring, see the README file. \n"
+          "  * Gap (of length N) penalty is: (open+N*extend)\n"
+          "  * To do alignment without affine gap, set '--gapopen 0'.\n"
+          "  * Scoring files should be matrices, with entries separated\n"
+          "    by a single character or whitespace.  See files in the\n"
+          "    'scores' directory for examples.\n"
+          "\n"
+          "  turner.isaac@gmail.com  (compiled: "COMPILE_TIME")\n");
 
   exit(EXIT_FAILURE);
 }
@@ -112,7 +120,7 @@ char read_fasta_entry(STRING_BUFFER* header, STRING_BUFFER* sequence,
 
   do
   {
-    read_len = string_buff_readline(header, file);
+    read_len = string_buff_zreadline(header, file);
     string_buff_chomp(header);
   }
   while (read_len > 0 && header->len == 0);
@@ -135,7 +143,7 @@ char read_fasta_entry(STRING_BUFFER* header, STRING_BUFFER* sequence,
   {
     int first_char = gzgetc(file);
   
-    if(first_char == -1)
+    if(first_char == 0)
     {
       break;
     }
@@ -147,7 +155,7 @@ char read_fasta_entry(STRING_BUFFER* header, STRING_BUFFER* sequence,
     }
 
     // Push char onto string
-    string_buff_add_char(sequence, first_char);
+    string_buff_append_char(sequence, first_char);
     
     string_buff_chomp(sequence);
     success = 1;
@@ -155,7 +163,7 @@ char read_fasta_entry(STRING_BUFFER* header, STRING_BUFFER* sequence,
     if(first_char != '\n' && first_char != '\r')
     {
       // Read the rest of the line
-      if(string_buff_readline(sequence, file) < 0) {
+      if(string_buff_zreadline(sequence, file) < 0) {
         break;
       }
 
@@ -186,10 +194,10 @@ void colour_print_alignment_against(char *alignment_a, char *alignment_b)
       red = 0;
       printf("%s", colour_stop);
     }
-    
-    
+
     if(((scoring->case_sensitive && alignment_a[i] != alignment_b[i]) ||
-        tolower(alignment_a[i]) != tolower(alignment_b[i])) &&
+        (!scoring->case_sensitive &&
+         tolower(alignment_a[i]) != tolower(alignment_b[i]))) &&
        alignment_a[i] != '-' && alignment_b[i] != '-')
     {
       if(!green)
@@ -212,8 +220,6 @@ void colour_print_alignment_against(char *alignment_a, char *alignment_b)
     // Stop all colours
     printf("%s", colour_stop);
   }
-
-  printf("\n");
 }
 
 void align_zam(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
@@ -298,8 +304,9 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
   }
   else
   {
-    printf("%s\n", alignment_a);
+    printf("%s", alignment_a);
   }
+  printf("\n");
   
   if(print_pretty)
   {
@@ -337,8 +344,9 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
   }
   else
   {
-    printf("%s\n", alignment_b);
+    printf("%s", alignment_b);
   }
+  printf("\n");
 
   if(print_scores)
   {
@@ -402,25 +410,27 @@ void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
     }
     else
     {
-      int bases_read = string_buff_reset_readline(entry1_seq, file);
-
-      if(bases_read == -1)
-      {
-        reading = 0;
-        break;
-      }
-      
-      bases_read = string_buff_reset_readline(entry2_seq, file);
-      
-      if(bases_read == -1)
-      {
-        print_usage("Odd number of sequences - I read in pairs!");
-        reading = 0;
-        break;
-      }
-      
+      int bases_read = string_buff_reset_zreadline(entry1_seq, file);
       string_buff_chomp(entry1_seq);
+
+      if(bases_read == 0)
+      {
+        reading = 0;
+        break;
+      }
+      
+      bases_read = string_buff_reset_zreadline(entry2_seq, file);
       string_buff_chomp(entry2_seq);
+
+      if(bases_read == 0)
+      {
+        if(entry1_seq->len > 0)
+        {
+          print_usage("Odd number of sequences - I read in pairs!");
+        }
+        reading = 0;
+        break;
+      }
     }
 
     // Check memory
@@ -560,6 +570,9 @@ int main(int argc, char* argv[])
                              nw_gap_open_default, nw_gap_extend_default,
                              0, 0,0);
   }
+
+  scoring->case_sensitive = case_sensitive;
+  // Scoring is now initiated - may tweak later
 
   // Keep track of what is set
   char substitutions_set = 0;
@@ -759,10 +772,6 @@ int main(int argc, char* argv[])
     align_from_file(file, &alignment_a, &alignment_b, &alignment_max_length);
     
     gzclose(file);
-  }
-  else if(argc == 1)
-  {
-    print_usage(NULL);
   }
 
   // Free memory

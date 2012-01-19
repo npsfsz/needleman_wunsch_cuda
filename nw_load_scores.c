@@ -66,7 +66,7 @@ void load_matrix_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive,
   int line_num = 0;
 
   // Read first line (column headings)
-  while((read_length = string_buff_reset_readline(sbuf, file)) > 0)
+  while((read_length = string_buff_reset_zreadline(sbuf, file)) > 0)
   {
     string_buff_chomp(sbuf);
 
@@ -114,7 +114,7 @@ void load_matrix_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive,
     }
 
     // Now read lines below
-    while((read_length = string_buff_reset_readline(sbuf, file)) > 0)
+    while((read_length = string_buff_reset_zreadline(sbuf, file)) > 0)
     {
       string_buff_chomp(sbuf);
 
@@ -184,7 +184,7 @@ void load_matrix_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive,
     int score;
     
     // Read rows
-    while((read_length = string_buff_reset_readline(sbuf, file)) > 0)
+    while((read_length = string_buff_reset_zreadline(sbuf, file)) > 0)
     {
       string_buff_chomp(sbuf);
 
@@ -252,7 +252,7 @@ void load_pairwise_scores(gzFile* file, NW_SCORING* scoring, char case_sensitive
   
   int num_pairs_added = 0;
 
-  while((read_length = string_buff_reset_readline(sbuf, file)) > 0)
+  while((read_length = string_buff_reset_zreadline(sbuf, file)) > 0)
   {
     string_buff_chomp(sbuf);
 
