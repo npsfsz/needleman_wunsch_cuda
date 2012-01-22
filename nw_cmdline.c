@@ -25,207 +25,117 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h> // tolower isspace
+#include <ctype.h> // tolower
+#include <stdarg.h> // required for va_list
 
-#include <zlib.h>
-
-#include "utility_lib.h"
+// my utility functions
 #include "string_buffer.h"
+#include "bioinf.h"
+#include "utility_lib.h"
 
-#include "nw_load_scores.h"
+// Alignment scoring and loading
+#include "alignment_scoring_load.h"
+
 #include "needleman_wunsch.h"
-
-// Printing
-char* mismatch_start_colour = "\033[92m"; // Mismatch (GREEN)
-char* indel_start_colour = "\033[91m"; // Insertion / deletion (RED)
-char* colour_stop = "\033[0m";
-
-// Defaults
-int nw_match_default = 1;
-int nw_mismatch_default = -2;
-int nw_gap_open_default = -4;
-int nw_gap_extend_default = -1;
 
 // For this run
 char* cmd;
 char print_colour = 0, print_pretty = 0, print_scores = 0,
      print_fasta = 0, print_zam = 0;
 
-NW_SCORING* scoring;
+SCORING_SYSTEM* scoring = NULL;
 
-void print_usage(char* err_msg)
+// Alignment results stored here
+char *alignment_a = NULL, *alignment_b = NULL;
+t_buf_pos alignment_max_length;
+
+
+void set_default_scoring()
 {
-  if(err_msg != NULL)
+  scoring = scoring_system_default();
+}
+
+void print_usage(char* err_fmt, ...)
+{
+  if(err_fmt != NULL)
   {
-    fprintf(stderr, "Error: %s\n", err_msg);
+    va_list argptr;
+    va_start(argptr, err_fmt);
+    
+    STRING_BUFFER *error = string_buff_init(200);
+    string_buff_append_str(error, "NeedlemanWunsch Error: ");
+    string_buff_vsprintf(error, string_buff_strlen(error), err_fmt, argptr);
+    string_buff_chomp(error);
+
+    va_end(argptr);
+
+    fprintf(stderr, "%s\n", error->buff);
+    fprintf(stderr, "Use -h option to print help\n");
+    exit(EXIT_FAILURE);
   }
+
+  if(scoring != NULL)
+  {
+    scoring_free(scoring);
+  }
+
+  // Get and print defaults
+  set_default_scoring();
 
   fprintf(stderr, "usage: %s [OPTIONS] [seq1 seq2]\n", cmd);
 
   fprintf(stderr,
-          "  Needleman-Wunsch optimal global alignment (maximises score).  \n"
-          "  Takes a pair of sequences on the command line, reads from a\n"
-          "  file and from sequence piped in.  Can read gzip files and FASTA.\n"
-          "\n"
-          "  OPTIONS:\n"
-          "    --file <file>        Sequence file reading with gzip support\n"
-          "    --stdin              Read from STDIN (same as '--file -')\n"
-          "    --case_sensitive     Case sensitive character comparison\n"
-          "\n"
-          "    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
-          "    --substitution_matrix <file>  see details for formatting\n"
-          "    --substitution_pairs <file>   see details for formatting\n"
-          "\n");
+"  Needleman-Wunsch optimal global alignment (maximises score). Takes a pair \n"
+"  of sequences on the command line, reads from a file and from sequence \n"
+"  piped in.  Can read gzip files and those in FASTA, FASTQ or plain format.\n"
+"\n"
+"  OPTIONS:\n"
+"    --file <file>        Sequence file reading with gzip support\n"
+"    --files <f1> <f2>    Read one sequence from each file at a time to align\n"
+"    --stdin              Read from STDIN (same as '--file -')\n"
+"    --case_sensitive     Case sensitive character comparison\n"
+"\n"
+"    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
+"    --substitution_matrix <file>  see details for formatting\n"
+"    --substitution_pairs <file>   see details for formatting\n"
+"\n");
 
   fprintf(stderr,
-          "    --match <score>      default: %i\n"
-          "    --mismatch <score>   default: %i\n"
-          "    --gapopen <score>    default: %i\n"
-          "    --gapextend <score>  default: %i\n",
-          nw_match_default, nw_mismatch_default,
-          nw_gap_open_default, nw_gap_extend_default);
+"    --match <score>      default: %i\n"
+"    --mismatch <score>   default: %i\n"
+"    --gapopen <score>    default: %i\n"
+"    --gapextend <score>  default: %i\n",
+          scoring->match, scoring->mismatch,
+          scoring->gap_open, scoring->gap_extend);
 
   fprintf(stderr,
-          "\n"
-          "    --freestartgap       No penalty for gap at start of alignment\n"
-          "    --freeendgap         No penalty for gap at end of alignment\n"
-          "\n"
-          "    --printscores        Print optimal alignment scores\n"
-          "    --printfasta         Print fasta header lines\n"
-          "    --pretty             Print with a descriptor line\n"
-          "    --colour             Print with colour\n"
-          "    --zam                A funky type of output\n"
-          "\n"
-          " DETAILS:\n"
-          "  * For help choosing scoring, see the README file. \n"
-          "  * Gap (of length N) penalty is: (open+N*extend)\n"
-          "  * To do alignment without affine gap, set '--gapopen 0'.\n"
-          "  * Scoring files should be matrices, with entries separated\n"
-          "    by a single character or whitespace.  See files in the\n"
-          "    'scores' directory for examples.\n"
-          "\n"
-          "  turner.isaac@gmail.com  (compiled: "COMPILE_TIME")\n");
+"\n"
+"    --freestartgap       No penalty for gap at start of alignment\n"
+"    --freeendgap         No penalty for gap at end of alignment\n"
+"\n"
+"    --printscores        Print optimal alignment scores\n"
+"    --printfasta         Print fasta header lines\n"
+"    --pretty             Print with a descriptor line\n"
+"    --colour             Print with colour\n"
+"    --zam                A funky type of output\n"
+"\n"
+" DETAILS:\n"
+"  * For help choosing scoring, see the README file. \n"
+"  * Gap (of length N) penalty is: (open+N*extend)\n"
+"  * To do alignment without affine gap, set '--gapopen 0'.\n"
+"  * Scoring files should be matrices, with entries separated by a single \n"
+"    character or whitespace.  See files in the 'scores' directory for examples.\n"
+"\n"
+"  turner.isaac@gmail.com  (compiled: "COMPILE_TIME")\n");
 
   exit(EXIT_FAILURE);
 }
 
-char read_fasta_entry(STRING_BUFFER* header, STRING_BUFFER* sequence,
-                      gzFile* file)
-{
-  string_buff_reset(header);
-  string_buff_reset(sequence);
-
-  // Read until we have a header line
-  int read_len;
-
-  do
-  {
-    read_len = string_buff_zreadline(header, file);
-    string_buff_chomp(header);
-  }
-  while (read_len > 0 && header->len == 0);
-
-  if(read_len <= 0)
-  {
-    return 0;
-  }
-  else if(header->buff[0] != '>')
-  {
-    fprintf(stderr, "Warning: FASTA header does not begin with '>' ('%s')\n",
-            header->buff);
-  }
-
-  string_buff_chomp(header);
-
-  char success = 0;
-
-  while(1)
-  {
-    int first_char = gzgetc(file);
-  
-    if(first_char == 0)
-    {
-      break;
-    }
-    else if(first_char == '>')
-    {
-      // Push char back onto buffer
-      gzungetc(first_char, file);
-      break;
-    }
-
-    // Push char onto string
-    string_buff_append_char(sequence, first_char);
-    
-    string_buff_chomp(sequence);
-    success = 1;
-
-    if(first_char != '\n' && first_char != '\r')
-    {
-      // Read the rest of the line
-      if(string_buff_zreadline(sequence, file) < 0) {
-        break;
-      }
-
-      string_buff_chomp(sequence);
-    }
-  }
-
-  return success;
-}
-
-void colour_print_alignment_against(char *alignment_a, char *alignment_b)
-{
-  int i;
-  char red = 0, green = 0;
-
-  for(i = 0; alignment_a[i] != '\0'; i++)
-  {
-    if(alignment_b[i] == '-')
-    {
-      if(!red)
-      {
-        printf("%s", indel_start_colour);
-        red = 1;
-      }
-    }
-    else if(red)
-    {
-      red = 0;
-      printf("%s", colour_stop);
-    }
-
-    if(((scoring->case_sensitive && alignment_a[i] != alignment_b[i]) ||
-        (!scoring->case_sensitive &&
-         tolower(alignment_a[i]) != tolower(alignment_b[i]))) &&
-       alignment_a[i] != '-' && alignment_b[i] != '-')
-    {
-      if(!green)
-      {
-        printf("%s", mismatch_start_colour);
-        green = 1;
-      }
-    }
-    else if(green)
-    {
-      green = 0;
-      printf("%s", colour_stop);
-    }
-
-    printf("%c", alignment_a[i]);
-  }
-
-  if(green || red)
-  {
-    // Stop all colours
-    printf("%s", colour_stop);
-  }
-}
-
-void align_zam(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
+void align_zam(char *seq_a, char *seq_b)
 {
   needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
 
+  // Swap '-' for '_'
   int i;
   for(i = 0; alignment_a[i] != '\0'; i++)
   {
@@ -245,7 +155,7 @@ void align_zam(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
 
   // Print branch 1
   printf("Br1:%s\n", alignment_a);
-  
+
   // Print spacer
   printf("    ");
 
@@ -277,12 +187,12 @@ void align_zam(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b)
   printf("%i %i\n\n", num_of_mismatches, num_of_indels);
 }
 
-void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
+void align(char *seq_a, char *seq_b,
            char *seq_a_name, char *seq_b_name)
 {
   if(print_zam)
   {
-    return align_zam(seq_a, seq_b, alignment_a, alignment_b);
+    return align_zam(seq_a, seq_b);
   }
 
   int score = needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
@@ -300,7 +210,8 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
   if(print_colour)
   {
     // Print alignment line 1
-    colour_print_alignment_against(alignment_a, alignment_b);
+    alignment_colour_print_against(alignment_a, alignment_b,
+                                   scoring->case_sensitive);
   }
   else
   {
@@ -311,25 +222,8 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
   if(print_pretty)
   {
     // Print spacer
-    int i;
+    alignment_print_spacer(alignment_a, alignment_b, scoring);
 
-    for(i = 0; alignment_a[i] != '\0'; i++)
-    {
-      if(alignment_a[i] == '-' || alignment_b[i] == '-')
-      {
-        printf(" ");
-      }
-      else if((scoring->case_sensitive && alignment_a[i] == alignment_b[i]) ||
-              tolower(alignment_a[i]) == tolower(alignment_b[i]))
-      {
-        printf("|");
-      }
-      else
-      {
-        printf("*");
-      }
-    }
-    
     printf("\n");
   }
   else if(print_fasta && seq_b_name != NULL)
@@ -340,7 +234,8 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
   if(print_colour)
   {
     // Print alignment line 2
-    colour_print_alignment_against(alignment_b, alignment_a);
+    alignment_colour_print_against(alignment_b, alignment_a,
+                                   scoring->case_sensitive);
   }
   else
   {
@@ -356,126 +251,80 @@ void align(char *seq_a, char *seq_b, char *alignment_a, char *alignment_b,
   printf("\n");
 }
 
-void align_from_file(gzFile* file, char **alignment_a, char **alignment_b,
-                     int *max_alignment)
+// If seq2 is NULL, read pair of entries from first file
+// Otherwise read an entry from each
+void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
 {
+  STRING_BUFFER *entry1_title = string_buff_init(200);
+  STRING_BUFFER *entry2_title = string_buff_init(200);
+  STRING_BUFFER *entry1_seq = string_buff_init(200);
+  STRING_BUFFER *entry2_seq = string_buff_init(200);
 
-  STRING_BUFFER *entry1_header = NULL, *entry2_header = NULL;
-  STRING_BUFFER* entry1_seq = string_buff_init(200);
-  STRING_BUFFER* entry2_seq = string_buff_init(200);
-  
-  // Read first line
-  char is_fasta = 0;
-  int first_char = gzgetc(file);
-  
-  if(first_char == -1)
+  char empty_file = 1;
+
+  while(1)
   {
-    fprintf(stderr, "Warning: empty sequence file\n");
-    return;
-  }
-  else if(first_char == '>')
-  {
-    // Reading FASTA
-    is_fasta = 1;
-    
-    entry1_header = string_buff_init(200);
-    entry2_header = string_buff_init(200);
-  }
-  else {
-    is_fasta = 0;
-  }
+    seq_file_read(seq1, entry1_title, entry1_seq);
 
-  // Put char back
-  gzungetc(first_char, file);
-
-  char reading = 1;
-
-  while(reading)
-  {
-    if(is_fasta)
+    if(string_buff_strlen(entry1_seq) == 0)
     {
-      reading = read_fasta_entry(entry1_header, entry1_seq, file);
-      
-      if(!reading)
-      {
-        break;
-      }
-      
-      reading = read_fasta_entry(entry2_header, entry2_seq, file);
-
-      if(!reading)
-      {
-        print_usage("Odd number of FASTA sequences - I read in pairs!");
-      }
+      break;
     }
     else
     {
-      int bases_read = string_buff_reset_zreadline(entry1_seq, file);
-      string_buff_chomp(entry1_seq);
-
-      if(bases_read == 0)
-      {
-        reading = 0;
-        break;
-      }
-      
-      bases_read = string_buff_reset_zreadline(entry2_seq, file);
-      string_buff_chomp(entry2_seq);
-
-      if(bases_read == 0)
-      {
-        if(entry1_seq->len > 0)
-        {
-          print_usage("Odd number of sequences - I read in pairs!");
-        }
-        reading = 0;
-        break;
-      }
+      empty_file = 0;
     }
 
-    // Check memory
-    int new_max_alignment = entry1_seq->len + entry2_seq->len;
+    seq_file_read((seq2 == NULL ? seq1 : seq2), entry2_title, entry2_seq);
 
-    if(new_max_alignment > *max_alignment)
+    if(string_buff_strlen(entry2_seq) == 0)
     {
-      // Expand memory used for storing result
-      *max_alignment = new_max_alignment;
-      nw_realloc_mem(new_max_alignment, alignment_a, alignment_b);
+      fprintf(stderr, "Odd number of sequences - I read in pairs!\n");
+      break;
     }
 
     // Align
-    if(is_fasta)
+    char *title1 = NULL, *title2 = NULL;
+
+    if(seq_file_get_type(seq1) != SEQ_PLAIN)
     {
-      // Sequences from FASTA files have names!
-      align(entry1_seq->buff, entry2_seq->buff, *alignment_a, *alignment_b,
-            entry1_header->buff, entry2_header->buff);
+      title1 = entry1_title->buff;
     }
-    else
+
+    if((seq2 == NULL && seq_file_get_type(seq1) != SEQ_PLAIN) ||
+       (seq2 != NULL && seq_file_get_type(seq2) != SEQ_PLAIN))
     {
-      // Sequences have no names
-      align(entry1_seq->buff, entry2_seq->buff, *alignment_a, *alignment_b,
-            NULL, NULL);
+      title2 = entry2_title->buff;
     }
+
+    // Check memory
+    t_buf_pos new_max_alignment = entry1_seq->len + entry2_seq->len;
+
+    if(new_max_alignment > alignment_max_length)
+    {
+      // Expand memory used for storing result
+      alignment_max_length = new_max_alignment;
+
+      if(!nw_realloc_mem((unsigned int)new_max_alignment,
+                         &alignment_a, &alignment_b))
+      {
+        print_usage("Ran out of memory");
+      }
+    }
+
+    align(entry1_seq->buff, entry2_seq->buff, title1, title2);
+  }
+
+  if(empty_file)
+  {
+    fprintf(stderr, "NeedlemanWunsch: Warning, empty input\n");
   }
 
   // Free memory
+  string_buff_free(entry1_title);
+  string_buff_free(entry2_title);
   string_buff_free(entry1_seq);
   string_buff_free(entry2_seq);
-
-  if(is_fasta)
-  {
-    string_buff_free(entry1_header);
-    string_buff_free(entry2_header);
-  }
-}
-
-void unknown_option(char *option)
-{
-  char *format = "Unkown option or argument required '%s'";
-  int length = strlen(format) + strlen(option) + 1;
-  char *err_msg = (char*) malloc(length*sizeof(char));
-  sprintf(err_msg, format, option);
-  print_usage(err_msg);
 }
 
 int main(int argc, char* argv[])
@@ -485,33 +334,24 @@ int main(int argc, char* argv[])
   #ifdef DEBUG
   printf("DEBUG: on\n");
   #endif
-
+  
   if(argc == 1)
   {
     print_usage(NULL);
   }
-  else if(argc == 3 && argv[1][0] != '-' && argv[2][0] != '-')
-  {
-    // default needleman wunsch
-    // > nw ACGT AAGT
-    char *alignment_a, *alignment_b;
-
-    nw_alloc_mem(argv[1], argv[2], &alignment_a, &alignment_b);
-
-    // set up scoring (zeros are to penalise gaps everwhere)
-    scoring = simple_scoring(nw_match_default, nw_mismatch_default,
-                             nw_gap_open_default, nw_gap_extend_default,
-                             0, 0, 0);
-
-    align(argv[1], argv[2], alignment_a, alignment_b, NULL, NULL);
-
-    return 0;
-  }
+  
+  //
+  // Command line arguments handled here
+  //
 
   char *seq1 = NULL, *seq2 = NULL;
 
-  char* file_path = NULL;
   char read_stdin = 0;
+
+  int file_list_length = 0;
+  int file_list_capacity = 10;
+  char** file_paths1 = (char**)malloc(sizeof(char*)*file_list_capacity);
+  char** file_paths2 = (char**)malloc(sizeof(char*)*file_list_capacity);
 
   scoring = NULL;
   char case_sensitive = 0;
@@ -523,7 +363,13 @@ int main(int argc, char* argv[])
   int argi;
   for(argi = 1; argi < argc; argi++)
   {
-    if(strcasecmp(argv[argi], "--case_sensitive") == 0)
+    if(strcasecmp(argv[argi], "--help") == 0 ||
+       strcasecmp(argv[argi], "-help") == 0 ||
+       strcasecmp(argv[argi], "-h") == 0)
+    {
+      print_usage(NULL);
+    }
+    else if(strcasecmp(argv[argi], "--case_sensitive") == 0)
     {
       case_sensitive = 1;
     }
@@ -566,9 +412,7 @@ int main(int argc, char* argv[])
   // Set up default scoring now
   if(scoring == NULL)
   {
-    scoring = simple_scoring(nw_match_default, nw_mismatch_default,
-                             nw_gap_open_default, nw_gap_extend_default,
-                             0, 0,0);
+    set_default_scoring();
   }
 
   scoring->case_sensitive = case_sensitive;
@@ -624,7 +468,7 @@ int main(int argc, char* argv[])
       else if(argi == argc-1)
       {
         // All the remaining options take an extra argument
-        unknown_option(argv[argi]);
+        print_usage("Unknown argument without parameter: %s",argv[argi]);
       }
       else if(strcasecmp(argv[argi], "--scoring") == 0)
       {
@@ -634,7 +478,12 @@ int main(int argc, char* argv[])
       else if(strcasecmp(argv[argi], "--substitution_matrix") == 0)
       {
         gzFile* sub_matrix_file = gzopen(argv[argi+1], "r");
-        load_matrix_scores(sub_matrix_file, scoring, case_sensitive, argv[argi+1]);
+        // gzbuffer(sub_matrix_file, 16384); // doesn't seem to work
+
+        align_scoring_load_matrix(sub_matrix_file, argv[argi+1],
+                                  scoring, case_sensitive);
+
+        //gzclose_r(sub_matrix_file); // doesn't seem to work
         gzclose(sub_matrix_file);
         substitutions_set = 1;
 
@@ -643,7 +492,12 @@ int main(int argc, char* argv[])
       else if(strcasecmp(argv[argi], "--substitution_pairs") == 0)
       {
         gzFile* sub_pairs_file = gzopen(argv[argi+1], "r");
-        load_pairwise_scores(sub_pairs_file, scoring, case_sensitive, argv[argi+1]);
+        //gzbuffer(sub_pairs_file, 16384); // doesn't seem to work
+        
+        align_scoring_load_pairwise(sub_pairs_file, argv[argi+1],
+                                    scoring, case_sensitive);
+        
+        //gzclose_r(sub_pairs_file); // doesn't seem to work
         gzclose(sub_pairs_file);
         substitutions_set = 1;
 
@@ -651,47 +505,115 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--match") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &scoring->match)) {
-          print_usage("Invalid match -- must be int");
+        if(!parse_entire_int(argv[argi+1], &scoring->match))
+        {
+          print_usage("Invalid --match argument ('%s') must be an int",
+                      argv[argi+1]);
         }
+
         match_set = 1;
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--mismatch") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &scoring->mismatch)) {
-          print_usage("Invalid mismatch score -- must be int");
+        if(!parse_entire_int(argv[argi+1], &scoring->mismatch))
+        {
+          print_usage("Invalid --mismatch argument ('%s') must be an int",
+                      argv[argi+1]);
         }
+
         mismatch_set = 1;
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--gapopen") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &scoring->gap_open)) {
-          print_usage("Invalid gap open score -- must be int");
+        if(!parse_entire_int(argv[argi+1], &scoring->gap_open))
+        {
+          print_usage("Invalid --gapopen argument ('%s') must be an int",
+                      argv[argi+1]);
         }
+
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--gapextend") == 0)
       {
-        if(!parse_entire_int(argv[argi+1], &scoring->gap_extend)) {
-          print_usage("Invalid gap extend score -- must be int");
+        if(!parse_entire_int(argv[argi+1], &scoring->gap_extend))
+        {
+          print_usage("Invalid --gapextend argument ('%s') must be an int",
+                      argv[argi+1]);
         }
+
         argi++; // took an argument
       }
       else if(strcasecmp(argv[argi], "--file") == 0)
       {
-        //file = gzopen(argv[argi+1], "r");
-        file_path = argv[argi+1];
+        if(file_list_length == file_list_capacity)
+        {
+          // Expand arrays used for holding file paths
+          file_list_capacity *= 2;
+          file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
+          file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
+
+          if(file_paths1 == NULL || file_paths2 == NULL)
+          {
+            print_usage("Ran out of memory taking file arguments!\n");
+          }
+        }
+
+        file_paths1[file_list_length] = argv[argi+1];
+        file_paths2[file_list_length++] = NULL;
         argi++; // took an argument
+      }
+      //else if(argi == argc-2)
+      //{
+        // All the remaining options take an 2 extra arguments
+        //unknown_option(argv[argi]);
+      //}
+      else if(strcasecmp(argv[argi], "--files") == 0)
+      {
+        if(file_list_length == file_list_capacity)
+        {
+          // Expand arrays used for holding file paths
+          file_list_capacity *= 2;
+          file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
+          file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
+
+          if(file_paths1 == NULL || file_paths2 == NULL)
+          {
+            print_usage("Ran out of memory taking file arguments!\n");
+          }
+        }
+
+        if(argi == argc-2)
+        {
+          print_usage("--files option takes 2 arguments");
+        }
+        else if(strcmp(argv[argi+1], "-") == 0 && strcmp(argv[argi+2], "-") == 0)
+        {
+          // Read both from stdin
+          file_paths1[file_list_length] = argv[argi+1];
+          file_paths2[file_list_length++] = NULL;
+        }
+        else
+        {
+          file_paths1[file_list_length] = argv[argi+1];
+          file_paths2[file_list_length++] = argv[argi+2];
+        }
+
+        argi += 2; // took two arguments
       }
       else
       {
         // Error - unknown option
-        unknown_option(argv[argi]);
+        print_usage("Unknown argument '%s'", argv[argi]);
       }
     }
-    else {
+    else
+    {
+      if(argc - argi != 2)
+      {
+        print_usage("Unknown options: '%s'", argv[argi]);
+      }
       break;
     }
   }
@@ -710,18 +632,11 @@ int main(int argc, char* argv[])
   // and set seq1 and seq2 if they have been passed
   if(argi < argc)
   {
-    if(argc - argi != 2)
-    {
-      print_usage("Unknown options");
-    }
-    else
-    {
-      seq1 = argv[argi];
-      seq2 = argv[argi+1];
-    }
+    seq1 = argv[argi];
+    seq2 = argv[argi+1];
   }
 
-  if(seq1 == NULL && file_path == NULL && !read_stdin)
+  if(seq1 == NULL && file_list_length == 0 && !read_stdin)
   {
     print_usage("No input specified");
   }
@@ -731,55 +646,62 @@ int main(int argc, char* argv[])
     print_usage("Cannot use --printscore, --printfasta, --pretty or --colour "
                 "with --zam");
   }
-
   // End of set up
 
   // Align!
-
-  char *alignment_a = NULL, *alignment_b = NULL;
-  int alignment_max_length;
-
   if(seq1 != NULL)
   {
     // Align seq1 and seq2
     alignment_max_length = nw_alloc_mem(seq1, seq2, &alignment_a, &alignment_b);
-    
-    align(seq1, seq2, alignment_a, alignment_b, NULL, NULL);
+    align(seq1, seq2, NULL, NULL);
   }
   else
   {
+    // Set up default memory for aligning from stdin / files
     alignment_max_length = 1000; // equivalent to two strings of 500bp
     alignment_a = (char*) malloc((alignment_max_length+1) * sizeof(char));
     alignment_b = (char*) malloc((alignment_max_length+1) * sizeof(char));
   }
 
-  if(file_path != NULL && strcmp(file_path, "-") != 0)
-  {
-    // read file
-    gzFile* file = gzopen(file_path, "r");
-
-    align_from_file(file, &alignment_a, &alignment_b, &alignment_max_length);
-    
-    gzclose(file);
-  }
-
-  if((file_path != NULL && strcmp(file_path, "-") == 0) || read_stdin)
+  if(read_stdin)
   {
     // Read from STDIN
-    gzFile* file = gzdopen(fileno(stdin), "r");
-    
-    // read file
-    align_from_file(file, &alignment_a, &alignment_b, &alignment_max_length);
-    
-    gzclose(file);
+    // Cannot turn off buffering in zlib, so have to use FILE for stdin
+    //gzFile* gz_file = gzdopen(fileno(stdin), "r");
+    //gzsetparams(gz_file, Z_NO_COMPRESSION, Z_DEFAULT_STRATEGY);
+    //SEQ_FILE* seq = seq_file_gzopen(gz_file);
+
+    SEQ_FILE* seq = seq_file_init(stdin);
+    align_from_file(seq, NULL);
+    seq_file_free(seq);
+
+    //gzclose(gz_file);
   }
 
-  // Free memory
+  int i;
+  for(i = 0; i < file_list_length; i++)
+  {
+    // Read file(s)
+    SEQ_FILE *seq1 = seq_open_cmd_arg(file_paths1[i]);
+    SEQ_FILE *seq2 = seq_open_cmd_arg(file_paths2[i]);
+
+    // Align from files
+    align_from_file(seq1, seq2);
+
+    // Close files
+    seq_close_cmd_arg(seq1, file_paths1[i]);
+    seq_close_cmd_arg(seq2, file_paths2[i]);
+  }
+
+  // Free arrays of file paths
+  free(file_paths1);
+  free(file_paths2);
+
+  // Free memory for storing alignment results
   free(alignment_a);
   free(alignment_b);
 
-  // Scoring also needs to be freed
-  free_nw_scoring(scoring);
+  scoring_free(scoring);
 
-  return 0;
+  return EXIT_SUCCESS;
 }

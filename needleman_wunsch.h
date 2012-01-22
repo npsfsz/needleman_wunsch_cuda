@@ -23,70 +23,20 @@
 #ifndef NEEDLEMAN_WUNSCH_HEADER_SEEN
 #define NEEDLEMAN_WUNSCH_HEADER_SEEN
 
-#include "uthash.h"
-
-typedef struct NW_SCORE NW_SCORE;
-typedef struct NW_SCORING NW_SCORING;
-
-struct NW_SCORE
-{
-  int id; // hash key
-  int swap_score;
-  UT_hash_handle hh; // makes this structure hashable
-};
-
-struct NW_SCORING
-{
-  int gap_open, gap_extend;
-
-  // Turn these on to turn off penalties for gaps at the start/end of alignment
-  char no_start_gap_penalty;
-  char no_end_gap_penalty;
-
-  // If swap_table != NULL, but char->char pair swap is not in the hashtable,
-  // should we use match/mismatch values?
-  char use_match_mismatch;
-  int match, mismatch;
-
-  char case_sensitive;
-
-  NW_SCORE* swap_table;
-};
-
-/* Allocate memory for result */
+#include "alignment.h"
 
 // alloc memory for result (returns length of seq_a + seq_b)
 int nw_alloc_mem(const char* seq_a, const char* seq_b,
                  char** alignment_a, char** alignment_b);
 
 // length is = length_a + length_b
-int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b);
+// Returns 1 on success, 0 on failure
+char nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b);
 
 /* Alignment */
 
 int needleman_wunsch(char* seq_a, char* seq_b,
                      char* alignment_a, char* alignment_b,
-                     NW_SCORING* scoring);
-
-int score_alignment(char* alignment_a, char* alignment_b, NW_SCORING* scoring);
-
-/* Scoring */
-
-// Scoring set up
-//void add_pair_to_scoring(NW_SCORE** hashtable, char a, char b, int score);
-void add_pair_to_scoring(NW_SCORING* scoring, char a, char b, int score);
-
-NW_SCORING* simple_scoring(int match, int mismatch, int gap_open, int gap_extend,
-                           char no_start_gap_penalty, char no_end_gap_penalty,
-                           char case_sensitive);
-
-void free_nw_scoring(NW_SCORING* scoring);
-
-// Some scoring systems
-NW_SCORING* scoring_system_PAM30();
-NW_SCORING* scoring_system_PAM70();
-NW_SCORING* scoring_system_BLOSUM80();
-NW_SCORING* scoring_system_BLOSUM62();
-NW_SCORING* scoring_system_DNA_hybridization();
+                     SCORING_SYSTEM* scoring);
 
 #endif

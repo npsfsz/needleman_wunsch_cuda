@@ -21,252 +21,27 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define ARR_LOOKUP(arr,width,i,j) arr[((unsigned long)(j)*(width)) + (i)]
-#define MAX_3(x,y,z) ((x) >= (y) && (x) >= (z) ? (x) : ((y) >= (z) ? (y) : (z)))
-#define GENERATE_HASH(a,b) (int)(((int)(a) << 8) | (int)(b)) // needed for scoring
-
-// Matrix names
-#define MATCH 0
-#define GAP_A 1
-#define GAP_B 2
+#include <limits.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h> // tolower
-
-#include <limits.h> // INT_MIN
-
-#ifdef DEBUG
-#undef INT_MIN
-#define INT_MIN -99
-
-#define MATRIX_NAME(x) ((x) == 0 ? "MATCH" : (\
-                        (x) == 1 ? "GAP_A" : (\
-                        (x) == 2 ? "GAP_B" : (\
-                        "Unknown matrix"))))
-#endif
 
 #include "needleman_wunsch.h"
 
-/* Scoring */
-
-void add_pair_to_scoring(NW_SCORING* scoring, char a, char b, int score)
+inline long max(long a, long b, long c)
 {
-  NW_SCORE** hashtable = &(scoring->swap_table);
+  long result = a;
 
-  NW_SCORE* new_entry = (NW_SCORE*) malloc(sizeof(NW_SCORE));
-  new_entry->id = GENERATE_HASH(a, b);
-  new_entry->swap_score = score;
-  HASH_ADD_INT(*hashtable, id, new_entry);
+  if(b > result) {
+    result = b;
+  }
+  if(c > result) {
+    result = c;
+  }
 
-#ifdef DEBUG
-  printf("adding %c -> %c: %i\n", a, b, score);
-#endif
+  return result;
 }
-
-void free_nw_scoring(NW_SCORING* scoring)
-{
-  if(scoring->swap_table != NULL)
-  {
-    NW_SCORE *curr, *tmp;
-
-    HASH_ITER(hh, scoring->swap_table, curr, tmp) {
-      HASH_DEL(scoring->swap_table, curr);
-      free(curr);
-    }
-  }
-
-  free(scoring);
-}
-
-NW_SCORING* custom_scoring(int num_chars, char* chars, int* scores,
-                           int gap_open, int gap_extend,
-                           char no_start_gap_penalty, char no_end_gap_penalty,
-                           char use_match_mismatch,
-                           int match, int mismatch,
-                           char case_sensitive)
-{
-  NW_SCORING* scoring = (NW_SCORING*) malloc(sizeof(NW_SCORING));
-
-  // Create hash table
-  scoring->swap_table = NULL;
-
-  int i, j;
-  char a, b;
-  int score;
-
-  for(i = 0; i < num_chars; i++)
-  {
-    a = case_sensitive ? chars[i] : tolower(chars[i]);
-
-    for(j = 0; j < num_chars; j++)
-    {
-      b = case_sensitive ? chars[j] : tolower(chars[j]);
-      score = ARR_LOOKUP(scores,num_chars,i,j);
-
-      add_pair_to_scoring(scoring, a, b, score);
-    }
-  }
-
-  // Gap of length 1 has penalty (gap_open+gap_extend)
-  // of length N: (gap_open + gap_extend*N)
-  scoring->gap_open = gap_open;
-  scoring->gap_extend = gap_extend;
-
-  scoring->no_start_gap_penalty = no_start_gap_penalty;
-  scoring->no_end_gap_penalty = no_end_gap_penalty;
-
-  scoring->use_match_mismatch = use_match_mismatch;
-  scoring->match = match;
-  scoring->mismatch = mismatch;
-  
-  scoring->case_sensitive = case_sensitive;
-
-  return scoring;
-}
-
-NW_SCORING* simple_scoring(int match, int mismatch, int gap_open, int gap_extend,
-                           char no_start_gap_penalty, char no_end_gap_penalty,
-                           char case_sensitive)
-{
-  NW_SCORING* scoring = (NW_SCORING*) malloc(sizeof(NW_SCORING));
-
-  scoring->swap_table = NULL;
-
-  // Gap of length 1 has penalty (gap_open+gap_extend)
-  // of length N: (gap_open + gap_extend*N)
-  scoring->gap_open = gap_open;
-  scoring->gap_extend = gap_extend;
-
-  scoring->no_start_gap_penalty = no_start_gap_penalty;
-  scoring->no_end_gap_penalty = no_end_gap_penalty;
-
-  scoring->use_match_mismatch = 1;
-  scoring->match = match;
-  scoring->mismatch = mismatch;
-
-  scoring->case_sensitive = case_sensitive;
-
-  return scoring;
-}
-
-int score_lookup(NW_SCORING* scoring, char a, char b)
-{
-  if(!scoring->case_sensitive)
-  {
-    a = tolower(a);
-    b = tolower(b);
-  }
-
-  if(scoring->swap_table == NULL)
-  {
-    return a == b ? scoring->match : scoring->mismatch;
-  }
-
-  // Look up in table
-  int hash_key = GENERATE_HASH(a,b);
-  NW_SCORE* result;
-
-  HASH_FIND_INT(scoring->swap_table, &hash_key, result);
-
-  if(result == NULL)
-  {
-    if(scoring->use_match_mismatch)
-    {
-      return a == b ? scoring->match : scoring->mismatch;
-    }
-    else
-    {
-      // Error
-      fprintf(stderr, "Error: Unknown character pair (%c,%c) and "
-                      "match/mismatch have not been set\n", a, b);
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  return result->swap_score;
-}
-
-/* End of Scoring */
-
-/*
- * - both strings should be of the same length and end with \0 char
- * - characters should be one of: aAcCgGtT
- * - gaps should be '-'
- */
-int score_alignment(char* alignment_a, char* alignment_b, NW_SCORING* scoring)
-{
-  int score = 0;
-  char in_gap_a = 0;
-  char in_gap_b = 0;
-  
-  int start = 0;
-  int end = strlen(alignment_a);
-  
-  if(scoring->no_start_gap_penalty)
-  {
-    // Move start
-    if(alignment_a[end-1] == '-')
-    {
-      while(alignment_a[end-1] == '-') end--;
-    }
-    else if(alignment_b[end-1] == '-')
-    {
-      while(alignment_b[end-1] == '-') end--;
-    }
-  }
-  
-  if(scoring->no_end_gap_penalty)
-  {
-    // Move end
-    if(alignment_a[start] == '-')
-    {
-      while(alignment_a[start] == '-') start++;
-    }
-    else if(alignment_b[start] == '-')
-    {
-      while(alignment_b[start] == '-') start++;
-    }
-  }
-  
-  int i;
-  for(i = start; i < end; i++)
-  {
-    if(alignment_a[i] == '-')
-    {
-      if(in_gap_a) {
-        score += scoring->gap_extend;
-      }
-      else {
-        in_gap_a = 1;
-        score += scoring->gap_open + scoring->gap_extend;
-      }
-      in_gap_b = 0;
-    }
-    else if(alignment_b[i] == '-')
-    {
-      if(in_gap_b) {
-        score += scoring->gap_extend;
-      }
-      else {
-        in_gap_b = 1;
-        score += scoring->gap_open + scoring->gap_extend;
-      }
-      in_gap_a = 0;
-    }
-    else
-    {
-      in_gap_a = 0;
-      in_gap_b = 0;
-
-      score += score_lookup(scoring, alignment_a[i], alignment_b[i]);
-    }
-  }
-  
-  return score;
-}
-
 
 /* Allocate memory for alignment results */
 
@@ -287,13 +62,23 @@ int nw_alloc_mem(const char* seq_a, const char* seq_b,
 }
 
 // length is = length_a + length_b
-int nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b)
+char nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b)
 {
   // longest_alignment + 1 to allow for \0
-  *alignment_a = realloc(*alignment_a, (length+1) * sizeof(char));
-  *alignment_b = realloc(*alignment_b, (length+1) * sizeof(char));
+  char* temp_a = realloc(*alignment_a, (length+1) * sizeof(char));
+  char* temp_b = realloc(*alignment_b, (length+1) * sizeof(char));
 
-  return length;
+  if(temp_a != NULL)
+  {
+    *alignment_a = temp_a;
+  }
+  
+  if(temp_b != NULL)
+  {
+    *alignment_b = temp_b;
+  }
+
+  return (temp_a != NULL && temp_b != NULL);
 }
 
 // Find backtrack start when scoring->no_end_gap_penalty is 1
@@ -330,70 +115,11 @@ char find_end_max(int *score_arr, int length_a, int length_b,
   return updated;
 }
 
-#ifdef DEBUG
-
-// Scoring
-void scoring_print(NW_SCORING* scoring)
-{
-  printf("scoring:\n");
-  printf("  match: %i; mismatch: %i; (use_match_mismatch: %i)\n",
-         scoring->match, scoring->mismatch, scoring->use_match_mismatch);
-
-  printf("  gap_open: %i; gap_extend: %i;\n",
-         scoring->gap_open, scoring->gap_extend);
-
-  printf("  no_start_gap_penalty: %i; no_end_gap_penalty: %i;\n",
-         scoring->no_start_gap_penalty, scoring->no_end_gap_penalty);
-
-  printf("  swap_table: %i\n", (scoring->swap_table == NULL));
-}
-
-
-void print_matrices(int* match_score, int* gap_a_score, int* gap_b_score,
-                    int length_a, int length_b)
-{
-  int score_width = length_a+1;
-  int i, j;
-
-  printf("match_score:\n");
-  for(j = 0; j <= length_b; j++)
-  {
-    printf("%i:", j);
-    for(i = 0; i <= length_a; i++)
-    {
-      printf(" %3i", ARR_LOOKUP(match_score, score_width, i, j));
-    }
-    printf("\n");
-  }
-  printf("gap_a_score:\n");
-  for(j = 0; j <= length_b; j++)
-  {
-    printf("%i:", j);
-    for(i = 0; i <= length_a; i++)
-    {
-      printf(" %3i", ARR_LOOKUP(gap_a_score, score_width, i, j));
-    }
-    printf("\n");
-  }
-  printf("gap_b_score:\n");
-  for(j = 0; j <= length_b; j++)
-  {
-    printf("%i:", j);
-    for(i = 0; i <= length_a; i++)
-    {
-      printf(" %3i", ARR_LOOKUP(gap_b_score, score_width, i, j));
-    }
-    printf("\n");
-  }
-}
-#endif
-
-/**
- * Align with gap start and continue penalties
- */
+// Alignment between two sequences using needleman-wunsch and a given
+// scoring system
 int needleman_wunsch(char* seq_a, char* seq_b,
                      char* alignment_a, char* alignment_b,
-                     NW_SCORING* scoring)
+                     SCORING_SYSTEM* scoring)
 {
   #ifdef DEBUG
   scoring_print(scoring);
@@ -496,12 +222,14 @@ int needleman_wunsch(char* seq_a, char* seq_b,
       unsigned long old_index = (unsigned long)(j-1)*score_width + (i-1);
       
       // substitution penalty
-      int substitution_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
+      int substitution_penalty = scoring_lookup(scoring,
+                                                seq_a[seq_i],
+                                                seq_b[seq_j]);
 
       // substitution
-      match_score[new_index] = MAX_3(match_score[old_index], // continue alignment
-                                     gap_a_score[old_index], // close gap in seq_a
-                                     gap_b_score[old_index]) // close gap in seq_b
+      match_score[new_index] = max(match_score[old_index], // continue alignment
+                                   gap_a_score[old_index], // close gap in seq_a
+                                   gap_b_score[old_index]) // close gap in seq_b
                                + substitution_penalty;
                                      
       
@@ -511,17 +239,17 @@ int needleman_wunsch(char* seq_a, char* seq_b,
       // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
       // (adding as ints would cause an integer overflow)
       gap_a_score[new_index]
-        = MAX_3((long)match_score[old_index] + gap_open_penalty,
-                (long)gap_a_score[old_index] + scoring->gap_extend,
-                (long)gap_b_score[old_index] + gap_open_penalty);
+        = max((long)match_score[old_index] + gap_open_penalty,
+              (long)gap_a_score[old_index] + scoring->gap_extend,
+              (long)gap_b_score[old_index] + gap_open_penalty);
     
       // Update gap_b_score[i][j] from position [i-1][j]
       old_index = (unsigned long)j*score_width + (i-1);
       
       gap_b_score[new_index]
-        = MAX_3((long)match_score[old_index] + gap_open_penalty,
-                (long)gap_a_score[old_index] + gap_open_penalty,
-                (long)gap_b_score[old_index] + scoring->gap_extend);
+        = max((long)match_score[old_index] + gap_open_penalty,
+              (long)gap_a_score[old_index] + gap_open_penalty,
+              (long)gap_b_score[old_index] + scoring->gap_extend);
     }
   }
   
@@ -636,7 +364,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
         alignment_b[next_char] = seq_b[seq_j];
         
         // Match
-        prev_match_penalty = score_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
+        prev_match_penalty = scoring_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
         prev_gap_a_penalty = prev_match_penalty; // match
         prev_gap_b_penalty = prev_match_penalty; // match
         
@@ -755,19 +483,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
          "length %i;\n",
          seq_i, seq_j, first_char, longest_alignment, alignment_len);
 #endif
-
-  /*int pos;
-  for(pos = 0; pos < alignment_len; pos++)
-  {
-    alignment_a[pos] = alignment_a[pos+first_char];
-    alignment_b[pos] = alignment_b[pos+first_char];
-  }
   
-  alignment_a[pos] = '\0';
-  alignment_b[pos] = '\0';
-  */
-  
-  // Use memmove instead
+  // Use memmove
   memmove(alignment_a, alignment_a+first_char, alignment_len);
   memmove(alignment_b, alignment_b+first_char, alignment_len);
 
@@ -775,181 +492,4 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   alignment_b[alignment_len] = '\0';
 
   return max_alignment_score;
-}
-
-//
-// Some scoring systems
-//
-
-// Scoring for protein comparisons of length <35bp
-NW_SCORING* scoring_system_PAM30()
-{
-  int pam30[576] =
-{ 6, -7, -4, -3, -6, -4, -2, -2, -7, -5, -6, -7, -5, -8, -2,  0, -1,-13, -8, -2, -3, -3, -3,-17,
- -7,  8, -6,-10, -8, -2, -9, -9, -2, -5, -8,  0, -4, -9, -4, -3, -6, -2,-10, -8, -7, -4, -6,-17,
- -4, -6,  8,  2,-11, -3, -2, -3,  0, -5, -7, -1, -9, -9, -6,  0, -2, -8, -4, -8,  6, -3, -3,-17,
- -3,-10,  2,  8,-14, -2,  2, -3, -4, -7,-12, -4,-11,-15, -8, -4, -5,-15,-11, -8,  6,  1, -5,-17,
- -6, -8,-11,-14, 10,-14,-14, -9, -7, -6,-15,-14,-13,-13, -8, -3, -8,-15, -4, -6,-12,-14, -9,-17,
- -4, -2, -3, -2,-14,  8,  1, -7,  1, -8, -5, -3, -4,-13, -3, -5, -5,-13,-12, -7, -3,  6, -5,-17,
- -2, -9, -2,  2,-14,  1,  8, -4, -5, -5, -9, -4, -7,-14, -5, -4, -6,-17, -8, -6,  1,  6, -5,-17,
- -2, -9, -3, -3, -9, -7, -4,  6, -9,-11,-10, -7, -8, -9, -6, -2, -6,-15,-14, -5, -3, -5, -5,-17,
- -7, -2,  0, -4, -7,  1, -5, -9,  9, -9, -6, -6,-10, -6, -4, -6, -7, -7, -3, -6, -1, -1, -5,-17,
- -5, -5, -5, -7, -6, -8, -5,-11, -9,  8, -1, -6, -1, -2, -8, -7, -2,-14, -6,  2, -6, -6, -5,-17,
- -6, -8, -7,-12,-15, -5, -9,-10, -6, -1,  7, -8,  1, -3, -7, -8, -7, -6, -7, -2, -9, -7, -6,-17,
- -7,  0, -1, -4,-14, -3, -4, -7, -6, -6, -8,  7, -2,-14, -6, -4, -3,-12, -9, -9, -2, -4, -5,-17,
- -5, -4, -9,-11,-13, -4, -7, -8,-10, -1,  1, -2, 11, -4, -8, -5, -4,-13,-11, -1,-10, -5, -5,-17,
- -8, -9, -9,-15,-13,-13,-14, -9, -6, -2, -3,-14, -4,  9,-10, -6, -9, -4,  2, -8,-10,-13, -8,-17,
- -2, -4, -6, -8, -8, -3, -5, -6, -4, -8, -7, -6, -8,-10,  8, -2, -4,-14,-13, -6, -7, -4, -5,-17,
-  0, -3,  0, -4, -3, -5, -4, -2, -6, -7, -8, -4, -5, -6, -2,  6,  0, -5, -7, -6, -1, -5, -3,-17,
- -1, -6, -2, -5, -8, -5, -6, -6, -7, -2, -7, -3, -4, -9, -4,  0,  7,-13, -6, -3, -3, -6, -4,-17,
--13, -2, -8,-15,-15,-13,-17,-15, -7,-14, -6,-12,-13, -4,-14, -5,-13, 13, -5,-15,-10,-14,-11,-17,
- -8,-10, -4,-11, -4,-12, -8,-14, -3, -6, -7, -9,-11,  2,-13, -7, -6, -5, 10, -7, -6, -9, -7,-17,
- -2, -8, -8, -8, -6, -7, -6, -5, -6,  2, -2, -9, -1, -8, -6, -6, -3,-15, -7,  7, -8, -6, -5,-17,
- -3, -7,  6,  6,-12, -3,  1, -3, -1, -6, -9, -2,-10,-10, -7, -1, -3,-10, -6, -8,  6,  0, -5,-17,
- -3, -4, -3,  1,-14,  6,  6, -5, -1, -6, -7, -4, -5,-13, -4, -5, -6,-14, -9, -6,  0,  6, -5,-17,
- -3, -6, -3, -5, -9, -5, -5, -5, -5, -5, -6, -5, -5, -8, -5, -3, -4,-11, -7, -5, -5, -5, -5,-17,
--17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,-17,  1};
-
-  char *bases = "ARNDCQEGHILKMFPSTWYVBZX*";
-
-  // Gap open -9, gap extend -1
-  // use_match_mismatch=1
-  // *->* match: 1
-  // *->* mismatch: -17
-  return custom_scoring(24, bases, pam30, -9, -1, 0,0, 1, 1, -17, 0);
-}
-
-// Scoring for protein comparisons of length 35-50
-NW_SCORING* scoring_system_PAM70()
-{
-  int pam70[576] =
-{ 5, -4, -2, -1, -4, -2, -1,  0, -4, -2, -4, -4, -3, -6,  0,  1,  1, -9, -5, -1, -1, -1, -2,-11,
- -4,  8, -3, -6, -5,  0, -5, -6,  0, -3, -6,  2, -2, -7, -2, -1, -4,  0, -7, -5, -4, -2, -3,-11,
- -2, -3,  6,  3, -7, -1,  0, -1,  1, -3, -5,  0, -5, -6, -3,  1,  0, -6, -3, -5,  5, -1, -2,-11,
- -1, -6,  3,  6, -9,  0,  3, -1, -1, -5, -8, -2, -7,-10, -4, -1, -2,-10, -7, -5,  5,  2, -3,-11,
- -4, -5, -7, -9,  9, -9, -9, -6, -5, -4,-10, -9, -9, -8, -5, -1, -5,-11, -2, -4, -8, -9, -6,-11,
- -2,  0, -1,  0, -9,  7,  2, -4,  2, -5, -3, -1, -2, -9, -1, -3, -3, -8, -8, -4, -1,  5, -2,-11,
- -1, -5,  0,  3, -9,  2,  6, -2, -2, -4, -6, -2, -4, -9, -3, -2, -3,-11, -6, -4,  2,  5, -3,-11,
-  0, -6, -1, -1, -6, -4, -2,  6, -6, -6, -7, -5, -6, -7, -3,  0, -3,-10, -9, -3, -1, -3, -3,-11,
- -4,  0,  1, -1, -5,  2, -2, -6,  8, -6, -4, -3, -6, -4, -2, -3, -4, -5, -1, -4,  0,  1, -3,-11,
- -2, -3, -3, -5, -4, -5, -4, -6, -6,  7,  1, -4,  1,  0, -5, -4, -1, -9, -4,  3, -4, -4, -3,-11,
- -4, -6, -5, -8,-10, -3, -6, -7, -4,  1,  6, -5,  2, -1, -5, -6, -4, -4, -4,  0, -6, -4, -4,-11,
- -4,  2,  0, -2, -9, -1, -2, -5, -3, -4, -5,  6,  0, -9, -4, -2, -1, -7, -7, -6, -1, -2, -3,-11,
- -3, -2, -5, -7, -9, -2, -4, -6, -6,  1,  2,  0, 10, -2, -5, -3, -2, -8, -7,  0, -6, -3, -3,-11,
- -6, -7, -6,-10, -8, -9, -9, -7, -4,  0, -1, -9, -2,  8, -7, -4, -6, -2,  4, -5, -7, -9, -5,-11,
-  0, -2, -3, -4, -5, -1, -3, -3, -2, -5, -5, -4, -5, -7,  7,  0, -2, -9, -9, -3, -4, -2, -3,-11,
-  1, -1,  1, -1, -1, -3, -2,  0, -3, -4, -6, -2, -3, -4,  0,  5,  2, -3, -5, -3,  0, -2, -1,-11,
-  1, -4,  0, -2, -5, -3, -3, -3, -4, -1, -4, -1, -2, -6, -2,  2,  6, -8, -4, -1, -1, -3, -2,-11,
- -9,  0, -6,-10,-11, -8,-11,-10, -5, -9, -4, -7, -8, -2, -9, -3, -8, 13, -3,-10, -7,-10, -7,-11,
- -5, -7, -3, -7, -2, -8, -6, -9, -1, -4, -4, -7, -7,  4, -9, -5, -4, -3,  9, -5, -4, -7, -5,-11,
- -1, -5, -5, -5, -4, -4, -4, -3, -4,  3,  0, -6,  0, -5, -3, -3, -1,-10, -5,  6, -5, -4, -2,-11,
- -1, -4,  5,  5, -8, -1,  2, -1,  0, -4, -6, -1, -6, -7, -4,  0, -1, -7, -4, -5,  5,  1, -2,-11,
- -1, -2, -1,  2, -9,  5,  5, -3,  1, -4, -4, -2, -3, -9, -2, -2, -3,-10, -7, -4,  1,  5, -3,-11,
- -2, -3, -2, -3, -6, -2, -3, -3, -3, -3, -4, -3, -3, -5, -3, -1, -2, -7, -5, -2, -2, -3, -3,-11,
--11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,-11,  1};
-  
-  char *bases = "ARNDCQEGHILKMFPSTWYVBZX*";
-
-  // Gap open -10, gap extend -1
-  // use_match_mismatch=1
-  // *->* match: 1
-  // *->* mismatch: -11
-  return custom_scoring(24, bases, pam70, -10, -1, 0,0, 1, 1, -11, 0);
-}
-
-// Scoring for protein comparisons of length 50-85
-NW_SCORING* scoring_system_BLOSUM80()
-{
-  int blosum80[576]
-    = { 7,-3,-3,-3,-1,-2,-2, 0,-3,-3,-3,-1,-2,-4,-1, 2, 0,-5,-4,-1,-3,-2,-1,-8,
-       -3, 9,-1,-3,-6, 1,-1,-4, 0,-5,-4, 3,-3,-5,-3,-2,-2,-5,-4,-4,-2, 0,-2,-8,
-       -3,-1, 9, 2,-5, 0,-1,-1, 1,-6,-6, 0,-4,-6,-4, 1, 0,-7,-4,-5, 5,-1,-2,-8,
-       -3,-3, 2,10,-7,-1, 2,-3,-2,-7,-7,-2,-6,-6,-3,-1,-2,-8,-6,-6, 6, 1,-3,-8,
-       -1,-6,-5,-7,13,-5,-7,-6,-7,-2,-3,-6,-3,-4,-6,-2,-2,-5,-5,-2,-6,-7,-4,-8,
-       -2, 1, 0,-1,-5, 9, 3,-4, 1,-5,-4, 2,-1,-5,-3,-1,-1,-4,-3,-4,-1, 5,-2,-8,
-       -2,-1,-1, 2,-7, 3, 8,-4, 0,-6,-6, 1,-4,-6,-2,-1,-2,-6,-5,-4, 1, 6,-2,-8,
-        0,-4,-1,-3,-6,-4,-4, 9,-4,-7,-7,-3,-5,-6,-5,-1,-3,-6,-6,-6,-2,-4,-3,-8,
-       -3, 0, 1,-2,-7, 1, 0,-4,12,-6,-5,-1,-4,-2,-4,-2,-3,-4, 3,-5,-1, 0,-2,-8,
-       -3,-5,-6,-7,-2,-5,-6,-7,-6, 7, 2,-5, 2,-1,-5,-4,-2,-5,-3, 4,-6,-6,-2,-8,
-       -3,-4,-6,-7,-3,-4,-6,-7,-5, 2, 6,-4, 3, 0,-5,-4,-3,-4,-2, 1,-7,-5,-2,-8,
-       -1, 3, 0,-2,-6, 2, 1,-3,-1,-5,-4, 8,-3,-5,-2,-1,-1,-6,-4,-4,-1, 1,-2,-8,
-       -2,-3,-4,-6,-3,-1,-4,-5,-4, 2, 3,-3, 9, 0,-4,-3,-1,-3,-3, 1,-5,-3,-2,-8,
-       -4,-5,-6,-6,-4,-5,-6,-6,-2,-1, 0,-5, 0,10,-6,-4,-4, 0, 4,-2,-6,-6,-3,-8,
-       -1,-3,-4,-3,-6,-3,-2,-5,-4,-5,-5,-2,-4,-6,12,-2,-3,-7,-6,-4,-4,-2,-3,-8,
-        2,-2, 1,-1,-2,-1,-1,-1,-2,-4,-4,-1,-3,-4,-2, 7, 2,-6,-3,-3, 0,-1,-1,-8,
-        0,-2, 0,-2,-2,-1,-2,-3,-3,-2,-3,-1,-1,-4,-3, 2, 8,-5,-3, 0,-1,-2,-1,-8,
-       -5,-5,-7,-8,-5,-4,-6,-6,-4,-5,-4,-6,-3, 0,-7,-6,-5,16, 3,-5,-8,-5,-5,-8,
-       -4,-4,-4,-6,-5,-3,-5,-6, 3,-3,-2,-4,-3, 4,-6,-3,-3, 3,11,-3,-5,-4,-3,-8,
-       -1,-4,-5,-6,-2,-4,-4,-6,-5, 4, 1,-4, 1,-2,-4,-3, 0,-5,-3, 7,-6,-4,-2,-8,
-       -3,-2, 5, 6,-6,-1, 1,-2,-1,-6,-7,-1,-5,-6,-4, 0,-1,-8,-5,-6, 6, 0,-3,-8,
-       -2, 0,-1, 1,-7, 5, 6,-4, 0,-6,-5, 1,-3,-6,-2,-1,-2,-5,-4,-4, 0, 6,-1,-8,
-       -1,-2,-2,-3,-4,-2,-2,-3,-2,-2,-2,-2,-2,-3,-3,-1,-1,-5,-3,-2,-3,-1,-2,-8,
-       -8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8,-8, 1};
-
-  char *bases = "ARNDCQEGHILKMFPSTWYVBZX*";
-
-  // Gap open -10, gap extend -1
-  // use_match_mismatch=1
-  // *->* match: 1
-  // *->* mismatch: -8
-  return custom_scoring(24, bases, blosum80, -10, -1, 0,0, 1, 1, -8, 0);
-}
-
-// Scoring for protein comparisons of length >85
-NW_SCORING* scoring_system_BLOSUM62()
-{
-  int blosum62[576]
-    = { 4,-1,-2,-2, 0,-1,-1, 0,-2,-1,-1,-1,-1,-2,-1, 1, 0,-3,-2, 0,-2,-1, 0,-4,
-       -1, 5, 0,-2,-3, 1, 0,-2, 0,-3,-2, 2,-1,-3,-2,-1,-1,-3,-2,-3,-1, 0,-1,-4,
-       -2, 0, 6, 1,-3, 0, 0, 0, 1,-3,-3, 0,-2,-3,-2, 1, 0,-4,-2,-3, 3, 0,-1,-4,
-       -2,-2, 1, 6,-3, 0, 2,-1,-1,-3,-4,-1,-3,-3,-1, 0,-1,-4,-3,-3, 4, 1,-1,-4,
-        0,-3,-3,-3, 9,-3,-4,-3,-3,-1,-1,-3,-1,-2,-3,-1,-1,-2,-2,-1,-3,-3,-2,-4,
-       -1, 1, 0, 0,-3, 5, 2,-2, 0,-3,-2, 1, 0,-3,-1, 0,-1,-2,-1,-2, 0, 3,-1,-4,
-       -1, 0, 0, 2,-4, 2, 5,-2, 0,-3,-3, 1,-2,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1,-4,
-        0,-2, 0,-1,-3,-2,-2, 6,-2,-4,-4,-2,-3,-3,-2, 0,-2,-2,-3,-3,-1,-2,-1,-4,
-       -2, 0, 1,-1,-3, 0, 0,-2, 8,-3,-3,-1,-2,-1,-2,-1,-2,-2, 2,-3, 0, 0,-1,-4,
-       -1,-3,-3,-3,-1,-3,-3,-4,-3, 4, 2,-3, 1, 0,-3,-2,-1,-3,-1, 3,-3,-3,-1,-4,
-       -1,-2,-3,-4,-1,-2,-3,-4,-3, 2, 4,-2, 2, 0,-3,-2,-1,-2,-1, 1,-4,-3,-1,-4,
-       -1, 2, 0,-1,-3, 1, 1,-2,-1,-3,-2, 5,-1,-3,-1, 0,-1,-3,-2,-2, 0, 1,-1,-4,
-       -1,-1,-2,-3,-1, 0,-2,-3,-2, 1, 2,-1, 5, 0,-2,-1,-1,-1,-1, 1,-3,-1,-1,-4,
-       -2,-3,-3,-3,-2,-3,-3,-3,-1, 0, 0,-3, 0, 6,-4,-2,-2, 1, 3,-1,-3,-3,-1,-4,
-       -1,-2,-2,-1,-3,-1,-1,-2,-2,-3,-3,-1,-2,-4, 7,-1,-1,-4,-3,-2,-2,-1,-2,-4,
-        1,-1, 1, 0,-1, 0, 0, 0,-1,-2,-2, 0,-1,-2,-1, 4, 1,-3,-2,-2, 0, 0, 0,-4,
-        0,-1, 0,-1,-1,-1,-1,-2,-2,-1,-1,-1,-1,-2,-1, 1, 5,-2,-2, 0,-1,-1, 0,-4,
-       -3,-3,-4,-4,-2,-2,-3,-2,-2,-3,-2,-3,-1, 1,-4,-3,-2,11, 2,-3,-4,-3,-2,-4,
-       -2,-2,-2,-3,-2,-1,-2,-3, 2,-1,-1,-2,-1, 3,-3,-2,-2, 2, 7,-1,-3,-2,-1,-4,
-        0,-3,-3,-3,-1,-2,-2,-3,-3, 3, 1,-2, 1,-1,-2,-2, 0,-3,-1, 4,-3,-2,-1,-4,
-       -2,-1, 3, 4,-3, 0, 1,-1, 0,-3,-4, 0,-3,-3,-2, 0,-1,-4,-3,-3, 4, 1,-1,-4,
-       -1, 0, 0, 1,-3, 3, 4,-2, 0,-3,-3, 1,-1,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1,-4,
-        0,-1,-1,-1,-2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2, 0, 0,-2,-1,-1,-1,-1,-1,-4,
-       -4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4,-4, 1};
-  
-  char *bases = "ARNDCQEGHILKMFPSTWYVBZX*";
-
-  // Gap open -10, gap extend -1
-  // use_match_mismatch=1
-  // *->* match: 1
-  // *->* mismatch: -4
-  return custom_scoring(24, bases, blosum62, -10, -1, 0,0, 1, 1, -4, 0);
-}
-
-// Scoring system for predicting DNA hybridization
-// "Optimization of the BLASTN substitution matrix for prediction of
-//   non-specific DNA microarray hybridization" (2009)
-// http://www.ncbi.nlm.nih.gov/pmc/articles/PMC2831327/
-NW_SCORING* scoring_system_DNA_hybridization()
-{
-  int sub_matrix[64] = { 2, 2,-4,-4,-4,-4,-4,-4,
-                         2, 2,-4,-4,-4,-4,-4,-4,
-                        -4,-4, 5, 5,-4,-4,-4,-4,
-                        -4,-4, 5, 5,-4,-4,-4,-4,
-                        -4,-4,-4,-4, 5, 5,-4,-4,
-                        -4,-4,-4,-4, 5, 5,-4,-4,
-                        -4,-4,-4,-4,-4,-4, 2, 2,
-                        -4,-4,-4,-4,-4,-4, 2, 2};
-
-  char *bases = "AaCcGgTt";
-
-  // Gap open -10, gap extend -10
-  return custom_scoring(8, bases, sub_matrix, -10, -10, 0,0,0,0,0,0);
 }
