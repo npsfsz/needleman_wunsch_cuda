@@ -144,12 +144,31 @@ match/mismatch: (1,-2)
 
 == Use Needleman-Wunsch alignment in your own code ==
 
+In order to use needleman_wunsch with your own c/c++ programs, you need the
+following files:
+
+needleman_wunsch.c
+needleman_wunsch.h
+alignment_scoring.c
+alignment_scoring.h
+alignment.c
+alignment.h
+
+these are all in the release, so added -I <path_to_dir> to gcc will work and the
+paths to the .c files.  Like so:
+
+gcc -I <path_to_dir> <path_to_dir>/needleman_wunsch.c <path_to_dir>/alignment.c
+<path_to_dir>/alignment_scoring.c <yourfiles>
+
 Use the code below and include needleman_wunsch.c in your compile command.
 You also need a copy of uthash.h in your path.  It's a single file downloadable
 from here: http://uthash.sourceforge.net ...and it's great!
 
 -----------------------------
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "needleman_wunsch.h"
 
 void align(char* seq_a, char* seq_b)
@@ -180,14 +199,16 @@ void align(char* seq_a, char* seq_b)
   // Compare character case-sensitively (usually set to 0 for DNA etc)
   char case_sensitive = 0;
 
-  NW_SCORING* scoring = simple_scoring(match, mismatch, gap_open, gap_extend,
-                                       no_start_gap_penalty, no_end_gap_penalty,
-                                       case_sensitive);
+  SCORING_SYSTEM* scoring = scoring_create(match, mismatch,
+                                           gap_open, gap_extend,
+                                           no_start_gap_penalty,
+                                           no_end_gap_penalty,
+                                           case_sensitive);
 
   // Add some special cases
   // x -> y means x in seq1 changing to y in seq2
-  add_pair_to_scoring(scoring, 'a', 'c', -2); // a -> c give substitution score -2
-  add_pair_to_scoring(scoring, 'c', 'a', -1); // c -> a give substitution score -1
+  scoring_add_mutation(scoring, 'a', 'c', -2); // a -> c give substitution score -2
+  scoring_add_mutation(scoring, 'c', 'a', -1); // c -> a give substitution score -1
 
   // We could also prohibit the aligning of characters not given as special cases
   // scoring->use_match_mismatch = 0;
@@ -199,13 +220,13 @@ void align(char* seq_a, char* seq_b)
   printf("alignment score: %i\n", score);
 
   // Free memory used to store scoring preferences
-  free_nw_scoring(scoring);
+  scoring_free(scoring);
 
   free(alignment_a);
   free(alignment_b);
 }
 
-# Compiled and tested 06 Dec 2011
+# Compiled and tested 22 Jan 2012
 -----------------------------
 
 == Development ==

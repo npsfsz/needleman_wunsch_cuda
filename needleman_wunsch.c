@@ -227,10 +227,11 @@ int needleman_wunsch(char* seq_a, char* seq_b,
                                                 seq_b[seq_j]);
 
       // substitution
-      match_score[new_index] = max(match_score[old_index], // continue alignment
-                                   gap_a_score[old_index], // close gap in seq_a
-                                   gap_b_score[old_index]) // close gap in seq_b
-                               + substitution_penalty;
+      match_score[new_index]
+        = max(match_score[old_index], // continue alignment
+              gap_a_score[old_index], // close gap in seq_a
+              gap_b_score[old_index]) // close gap in seq_b
+          + substitution_penalty;
                                      
       
       // Update gap_a_score[i][j] from position [i][j-1]
