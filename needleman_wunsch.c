@@ -82,10 +82,12 @@ char nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b)
 }
 
 // Find backtrack start when scoring->no_end_gap_penalty is 1
-char find_end_max(int *score_arr, int length_a, int length_b,
-                  int *curr_score, int *seq_i, int *seq_j)
+char find_end_max(score_t *score_arr,
+                  unsigned int length_a, unsigned int length_b,
+                  score_t *curr_score,
+                  unsigned int *seq_i, unsigned int *seq_j)
 {
-  int i, j, temp;
+  unsigned int i, j, temp;
   char updated = 0;
 
   for(i = 1; i <= length_a; i++)
@@ -125,14 +127,15 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   scoring_print(scoring);
   #endif
 
-  int length_a = strlen(seq_a);
-  int length_b = strlen(seq_b);
+  size_t length_a = strlen(seq_a);
+  size_t length_b = strlen(seq_b);
   
   // Calculate largest amount of mem needed
-  int longest_alignment = length_a + length_b;
+  unsigned int longest_alignment = (unsigned int)length_a +
+                                   (unsigned int)length_b;
   
-  int score_width = length_a+1;
-  int score_height = length_b+1;
+  unsigned int score_width = length_a+1;
+  unsigned int score_height = length_b+1;
   
   // Check sequences aren't too long to align
   if(score_height > ULONG_MAX / score_width)
@@ -148,11 +151,11 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   // addressing [a][b]
 
   // Score having just matched
-  int* match_score = (int*) malloc(arr_size * sizeof(int));
+  score_t* match_score = (score_t*) malloc(arr_size * sizeof(int));
   // score having just deleted from seq_a
-  int* gap_a_score = (int*) malloc(arr_size * sizeof(int));
+  score_t* gap_a_score = (score_t*) malloc(arr_size * sizeof(int));
   // score having just inserted into seq_a
-  int* gap_b_score = (int*) malloc(arr_size * sizeof(int));
+  score_t* gap_b_score = (score_t*) malloc(arr_size * sizeof(int));
   
   if(match_score == NULL || gap_a_score == NULL || gap_b_score == NULL)
   {
@@ -161,7 +164,7 @@ int needleman_wunsch(char* seq_a, char* seq_b,
             num_of_bytes);
     
     #ifdef DEBUG
-    fprintf(stderr, "SeqA length: %i; SeqB length: %i\n", length_a, length_b);
+    fprintf(stderr, "SeqA length: %i; SeqB length: %i\n", (int)length_a, (int)length_b);
     fprintf(stderr, "arr_size: %lu; int size: %li\n", arr_size, sizeof(int));
     #endif
 
@@ -171,8 +174,10 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   #ifdef DEBUG
   printf("Malloc'd score matrices!\n");
   #endif
-  
-  int i, j;
+
+  // Fill in traceback matrix
+
+  unsigned int i, j;
   
   // [0][0]
   match_score[0] = 0;
@@ -213,8 +218,8 @@ int needleman_wunsch(char* seq_a, char* seq_b,
     for (j = 1; j < score_height; j++)
     {
       // It's an indexing thing...
-      int seq_i = i - 1;
-      int seq_j = j - 1;
+      unsigned int seq_i = i - 1;
+      unsigned int seq_j = j - 1;
       
       // Update match_score[i][j] with position [i-1][j-1]
       // Addressing array must be done with unsigned long
@@ -228,9 +233,9 @@ int needleman_wunsch(char* seq_a, char* seq_b,
 
       // substitution
       match_score[new_index]
-        = max(match_score[old_index], // continue alignment
-              gap_a_score[old_index], // close gap in seq_a
-              gap_b_score[old_index]) // close gap in seq_b
+        = max((long)match_score[old_index], // continue alignment
+              (long)gap_a_score[old_index], // close gap in seq_a
+              (long)gap_b_score[old_index]) // close gap in seq_b
           + substitution_penalty;
                                      
       
@@ -263,25 +268,22 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   //
   
   // work backwards re-tracing optimal alignment, then shift sequences into place
-  int seq_i, seq_j;
-  char curr_matrix;
-  int curr_score;
+
+  // seq_i is the index of the next char of seq_a to be added (working bckwrds)
+  // seq_j is the index of the next char of seq_b to be added (working bckwrds)
+  unsigned int seq_i, seq_j;
+  enum Matrix curr_matrix;
+  score_t curr_score;
   
   // Position of next alignment character in buffer (working backwards)
-  int next_char = longest_alignment-1;
-  
-  // Previous scores on each matrix
-  int prev_match_score, prev_gap_a_score, prev_gap_b_score;
-  
-  // penalties if coming from each of the prev matrices
-  int prev_match_penalty, prev_gap_a_penalty, prev_gap_b_penalty;
+  unsigned int next_char = longest_alignment-1;
   
   if(scoring->no_end_gap_penalty)
   {
     curr_matrix = MATCH;
     curr_score = ARR_LOOKUP(match_score, score_width, score_width-1, 0);
-    seq_i = length_a - 1;
-    seq_j = length_b - 1;
+    seq_i = (unsigned int)length_a - 1;
+    seq_j = (unsigned int)length_b - 1;
     
     find_end_max(match_score, length_a, length_b,
                  &curr_score, &seq_i, &seq_j);
@@ -342,60 +344,40 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   }
 
 #ifdef DEBUG
-  print_matrices(match_score, gap_a_score, gap_b_score, length_a, length_b);
+  alignment_print_matrices(match_score, gap_a_score, gap_b_score,
+                           length_a, length_b);
 #endif
 
   // Hold this value to return later
   int max_alignment_score = curr_score;
   
+  unsigned int score_x = (unsigned int)seq_i+1;
+  unsigned int score_y = (unsigned int)seq_j+1;
+  unsigned long arr_index;
+
   // note: longest_alignment = strlen(seq_a) + strlen(seq_b)
-  // seq_i is the index of the next char of seq_a to be added (working bckwrds)
-  // seq_j is the index of the next char of seq_b to be added (working bckwrds)
-  for(; seq_i >= 0 && seq_j >= 0; next_char--)
+  for(; score_x > 0 && score_y > 0; next_char--)
   {
     #ifdef DEBUG
     printf("matrix: %s (%i,%i) score: %i\n",
-           MATRIX_NAME(curr_matrix), seq_i, seq_j, curr_score);
+           MATRIX_NAME(curr_matrix), score_x-1, score_y-1, curr_score);
     #endif
 
     switch(curr_matrix)
     {
       case MATCH:
-        alignment_a[next_char] = seq_a[seq_i];
-        alignment_b[next_char] = seq_b[seq_j];
-        
-        // Match
-        prev_match_penalty = scoring_lookup(scoring, seq_a[seq_i], seq_b[seq_j]);
-        prev_gap_a_penalty = prev_match_penalty; // match
-        prev_gap_b_penalty = prev_match_penalty; // match
-        
-        // Moving back on i and j
-        seq_i--;
-        seq_j--;
+        alignment_a[next_char] = seq_a[score_x-1];
+        alignment_b[next_char] = seq_b[score_y-1];
         break;
 
       case GAP_A:
         alignment_a[next_char] = '-';
-        alignment_b[next_char] = seq_b[seq_j];
-        
-        prev_match_penalty = scoring->gap_extend + scoring->gap_open;
-        prev_gap_a_penalty = scoring->gap_extend;
-        prev_gap_b_penalty = scoring->gap_extend + scoring->gap_open;
-        
-        // Moving back on j
-        seq_j--;
+        alignment_b[next_char] = seq_b[score_y-1];
         break;
 
       case GAP_B:
-        alignment_a[next_char] = seq_a[seq_i];
+        alignment_a[next_char] = seq_a[score_x-1];
         alignment_b[next_char] = '-';
-        
-        prev_match_penalty = scoring->gap_extend + scoring->gap_open;
-        prev_gap_a_penalty = scoring->gap_extend + scoring->gap_open;
-        prev_gap_b_penalty = scoring->gap_extend;
-        
-        // Moving back on i
-        seq_i--;
         break;
 
       default:
@@ -404,52 +386,12 @@ int needleman_wunsch(char* seq_a, char* seq_b,
         exit(EXIT_FAILURE);
     }
     
-    // Current score matrix position is [seq_i+1][seq_j+1]
-    int score_i = seq_i + 1;
-    int score_j = seq_j + 1;
-
-    // [score_i][score_j] is the next position in the score matrices
-    
-    prev_match_score = ARR_LOOKUP(match_score, score_width, score_i, score_j);
-    prev_gap_a_score = ARR_LOOKUP(gap_a_score, score_width, score_i, score_j);
-    prev_gap_b_score = ARR_LOOKUP(gap_b_score, score_width, score_i, score_j);
-    
-#ifdef DEBUG
-    printf("  prev_match_score: %i; prev_gap_a_score: %i; prev_gap_b_score: %i\n",
-           prev_match_score, prev_gap_a_score, prev_gap_b_score);
-#endif
-    
-    // Now figure out which matrix we came from
-    // Use addition as long datatypes to prevent integer overflow
-    if((long)prev_match_score + prev_match_penalty == curr_score)
-    {
-      // Both sequences have a base
-      curr_matrix = MATCH;
-      curr_score = prev_match_score;
-    }
-    else if((long)prev_gap_a_score + prev_gap_a_penalty == curr_score)
-    {
-      // Gap in seq_a
-      curr_matrix = GAP_A;
-      curr_score = prev_gap_a_score;
-    }
-    else if((long)prev_gap_b_score + prev_gap_b_penalty == curr_score)
-    {
-      // Gap in seq_b
-      curr_matrix = GAP_B;
-      curr_score = prev_gap_b_score;
-    }
-    else
-    {
-      fprintf(stderr, "Program error: traceback fail\n");
-      fprintf(stderr, "This may be due to an integer overflow if your "
-                      "sequences are long or if scores are large.  \n");
-      fprintf(stderr, "If this is the case using smaller scores or "
-                      "shorter sequences may work around this problem.  \n");
-      fprintf(stderr, " If you think this is a bug, please report it to: "
-                      "turner.isaac@gmail.com\n");
-      exit(EXIT_FAILURE);
-    }
+    alignment_reverse_move(&curr_matrix, &curr_score,
+                           &score_x, &score_y, &arr_index,
+                           score_width,
+                           // score matrices:
+                           match_score, gap_a_score, gap_b_score,
+                           seq_a, seq_b, scoring);
   }
   
   // Free memory
@@ -458,32 +400,26 @@ int needleman_wunsch(char* seq_a, char* seq_b,
   free(gap_b_score);
   
   // Gap in A
-  while(seq_j >= 0)
+  while(score_y > 0)
   {
     alignment_a[next_char] = '-';
-    alignment_b[next_char] = seq_b[seq_j];
+    alignment_b[next_char] = seq_b[score_y-1];
     next_char--;
-    seq_j--;
+    score_y--;
   }
 
   // Gap in B
-  while(seq_i >= 0)
+  while(score_x > 0)
   {
-    alignment_a[next_char] = seq_a[seq_i];
+    alignment_a[next_char] = seq_a[score_x-1];
     alignment_b[next_char] = '-';
     next_char--;
-    seq_i--;
+    score_x--;
   }
 
   // Shift alignment strings back into 0th position in char arrays
   int first_char = next_char+1;
   int alignment_len = longest_alignment - first_char;
-
-#ifdef DEBUG
-  printf("END: seq_i: %i; seq_j: %i; first_char %i; longest_alignment %i; "
-         "length %i;\n",
-         seq_i, seq_j, first_char, longest_alignment, alignment_len);
-#endif
   
   // Use memmove
   memmove(alignment_a, alignment_a+first_char, alignment_len);
