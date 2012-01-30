@@ -1,7 +1,7 @@
 /*
  nw_example.c
  project: NeedlemanWunsch
- author: Isaac Turner <isaac.turner@dtc.ox.ac.uk>
+ author: Isaac Turner <turner.isaac@gmail.com>
  Copyright (C) 06-Dec-2011
  
  This program is free software: you can redistribute it and/or modify
