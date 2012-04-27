@@ -192,7 +192,9 @@ void align(char *seq_a, char *seq_b,
 {
   if(print_zam)
   {
-    return align_zam(seq_a, seq_b);
+    align_zam(seq_a, seq_b);
+    fflush(stdout);
+    return;
   }
 
   int score = needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
@@ -249,6 +251,8 @@ void align(char *seq_a, char *seq_b,
   }
   
   printf("\n");
+
+  fflush(stdout);
 }
 
 // If seq2 is NULL, read pair of entries from first file
