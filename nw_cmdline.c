@@ -49,6 +49,10 @@ SCORING_SYSTEM* scoring = NULL;
 char *alignment_a = NULL, *alignment_b = NULL;
 t_buf_pos alignment_max_length;
 
+// File loading
+int file_list_length = 0;
+int file_list_capacity = 10;
+char **file_paths1, **file_paths2;
 
 void set_default_scoring()
 {
@@ -129,6 +133,22 @@ void print_usage(char* err_fmt, ...)
 "  turner.isaac@gmail.com  (compiled: "COMPILE_TIME")\n");
 
   exit(EXIT_FAILURE);
+}
+
+void check_file_array_lengths()
+{
+  if(file_list_length == file_list_capacity)
+  {
+    // Expand arrays used for holding file paths
+    file_list_capacity *= 2;
+    file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
+    file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
+
+    if(file_paths1 == NULL || file_paths2 == NULL)
+    {
+      print_usage("Ran out of memory taking file arguments!\n");
+    }
+  }
 }
 
 void align_zam(char *seq_a, char *seq_b)
@@ -264,13 +284,12 @@ void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
   STRING_BUFFER *entry1_seq = string_buff_init(200);
   STRING_BUFFER *entry2_seq = string_buff_init(200);
 
+  // Complain if nothing is read in
   char empty_file = 1;
 
   while(1)
   {
-    seq_file_read(seq1, entry1_title, entry1_seq);
-
-    if(string_buff_strlen(entry1_seq) == 0)
+    if(!seq_file_read(seq1, entry1_title, entry1_seq))
     {
       break;
     }
@@ -279,9 +298,7 @@ void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
       empty_file = 0;
     }
 
-    seq_file_read((seq2 == NULL ? seq1 : seq2), entry2_title, entry2_seq);
-
-    if(string_buff_strlen(entry2_seq) == 0)
+    if(!seq_file_read((seq2 == NULL ? seq1 : seq2), entry2_title, entry2_seq))
     {
       fprintf(stderr, "Odd number of sequences - I read in pairs!\n");
       break;
@@ -350,12 +367,9 @@ int main(int argc, char* argv[])
 
   char *seq1 = NULL, *seq2 = NULL;
 
-  char read_stdin = 0;
-
-  int file_list_length = 0;
-  int file_list_capacity = 10;
-  char** file_paths1 = (char**)malloc(sizeof(char*)*file_list_capacity);
-  char** file_paths2 = (char**)malloc(sizeof(char*)*file_list_capacity);
+  // Initialise arrays
+  file_paths1 = (char**)malloc(sizeof(char*)*file_list_capacity);
+  file_paths2 = (char**)malloc(sizeof(char*)*file_list_capacity);
 
   scoring = NULL;
   char case_sensitive = 0;
@@ -467,7 +481,11 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--stdin") == 0)
       {
-        read_stdin = 1;
+        // Similar to --file argument below
+        check_file_array_lengths();
+
+        file_paths1[file_list_length] = "-";
+        file_paths2[file_list_length++] = NULL;
       }
       else if(argi == argc-1)
       {
@@ -551,42 +569,16 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--file") == 0)
       {
-        if(file_list_length == file_list_capacity)
-        {
-          // Expand arrays used for holding file paths
-          file_list_capacity *= 2;
-          file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
-          file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
-
-          if(file_paths1 == NULL || file_paths2 == NULL)
-          {
-            print_usage("Ran out of memory taking file arguments!\n");
-          }
-        }
+        check_file_array_lengths();
 
         file_paths1[file_list_length] = argv[argi+1];
         file_paths2[file_list_length++] = NULL;
         argi++; // took an argument
       }
-      //else if(argi == argc-2)
-      //{
-        // All the remaining options take an 2 extra arguments
-        //unknown_option(argv[argi]);
-      //}
+      // Remaining options take two arguments but check themselves
       else if(strcasecmp(argv[argi], "--files") == 0)
       {
-        if(file_list_length == file_list_capacity)
-        {
-          // Expand arrays used for holding file paths
-          file_list_capacity *= 2;
-          file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
-          file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
-
-          if(file_paths1 == NULL || file_paths2 == NULL)
-          {
-            print_usage("Ran out of memory taking file arguments!\n");
-          }
-        }
+        check_file_array_lengths();
 
         if(argi == argc-2)
         {
@@ -640,7 +632,7 @@ int main(int argc, char* argv[])
     seq2 = argv[argi+1];
   }
 
-  if(seq1 == NULL && file_list_length == 0 && !read_stdin)
+  if(seq1 == NULL && file_list_length == 0)
   {
     print_usage("No input specified");
   }
@@ -665,21 +657,6 @@ int main(int argc, char* argv[])
     alignment_max_length = 1000; // equivalent to two strings of 500bp
     alignment_a = (char*) malloc((alignment_max_length+1) * sizeof(char));
     alignment_b = (char*) malloc((alignment_max_length+1) * sizeof(char));
-  }
-
-  if(read_stdin)
-  {
-    // Read from STDIN
-    // Cannot turn off buffering in zlib, so have to use FILE for stdin
-    //gzFile* gz_file = gzdopen(fileno(stdin), "r");
-    //gzsetparams(gz_file, Z_NO_COMPRESSION, Z_DEFAULT_STRATEGY);
-    //SEQ_FILE* seq = seq_file_gzopen(gz_file);
-
-    SEQ_FILE* seq = seq_file_init(stdin);
-    align_from_file(seq, NULL);
-    seq_file_free(seq);
-
-    //gzclose(gz_file);
   }
 
   int i;
