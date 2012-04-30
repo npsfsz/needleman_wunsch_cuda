@@ -295,6 +295,7 @@ void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
     }
     else
     {
+      // Read something in
       empty_file = 0;
     }
 
@@ -312,8 +313,8 @@ void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
       title1 = entry1_title->buff;
     }
 
-    if((seq2 == NULL && seq_file_get_type(seq1) != SEQ_PLAIN) ||
-       (seq2 != NULL && seq_file_get_type(seq2) != SEQ_PLAIN))
+    if(seq2 == NULL ? seq_file_get_type(seq1) != SEQ_PLAIN
+                    : seq_file_get_type(seq2) != SEQ_PLAIN)
     {
       title2 = entry2_title->buff;
     }
