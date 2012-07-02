@@ -1,9 +1,9 @@
 LIBS_PATH=../../libs
 
 ifdef DEBUG
-	FLAGS=-DDEBUG=1 --debug
+	CFLAGS := -DDEBUG=1 --debug
 else
-	FLAGS=-O3
+	CFLAGS := -O3
 endif
 
 UTILITY_LIB_PATH := $(LIBS_PATH)/utility_lib
@@ -15,14 +15,17 @@ SCORING_PATH := $(LIBS_PATH)/alignment_scoring
 UNAME := $(shell uname)
 
 ifeq ($(UNAME), Darwin)
-	FLAGS := $(FLAGS) -fnested-functions
+	CFLAGS := $(CFLAGS) -fnested-functions
 endif
 
 # Add compile time
-FLAGS := $(FLAGS) -DCOMPILE_TIME='"$(shell date)"' -DSCORE_TYPE='int'
+CFLAGS := $(CFLAGS) -Wall -Wextra -DCOMPILE_TIME='"$(shell date)"'
+
+# Add data type for alignment scoring
+CFLAGS := $(CFLAGS) -DSCORE_TYPE='int'
 
 all:
-	gcc -o needleman_wunsch $(FLAGS) -Wall -lz \
+	gcc -o needleman_wunsch $(CFLAGS) -lz \
 	-I . -I $(UTILITY_LIB_PATH) -I $(STRING_BUF_PATH) \
 	-I $(BIOINF_LIB_PATH) -I $(SCORING_PATH) \
 	nw_cmdline.c needleman_wunsch.c \

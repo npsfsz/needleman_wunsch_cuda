@@ -87,12 +87,14 @@ char find_end_max(score_t *score_arr,
                   score_t *curr_score,
                   unsigned int *seq_i, unsigned int *seq_j)
 {
-  unsigned int i, j, temp;
+  unsigned int i, j;
+  score_t temp;
   char updated = 0;
 
   for(i = 1; i <= length_a; i++)
   {
     temp = ARR_LOOKUP(score_arr, length_a+1, i, length_b);
+
     if(temp > *curr_score)
     {
       *curr_score = temp;
@@ -105,6 +107,7 @@ char find_end_max(score_t *score_arr,
   for(j = 1; j <= length_b; j++)
   {
     temp = ARR_LOOKUP(score_arr, length_a+1, length_a, j);
+
     if(temp > *curr_score)
     {
       *curr_score = temp;
@@ -307,14 +310,14 @@ int needleman_wunsch(char* seq_a, char* seq_b,
     #endif
     
     // Fill in last gap
-    int i;
+    unsigned int i;
     for(i = length_a - 1; i > seq_i; i--, next_char--)
     {
       alignment_a[next_char] = seq_a[i];
       alignment_b[next_char] = '-';
     }
 
-    int j;
+    unsigned int j;
     for(j = length_b - 1; j > seq_j; j--, next_char--)
     {
       alignment_a[next_char] = '-';
