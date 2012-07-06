@@ -66,10 +66,10 @@ void print_usage(char* err_fmt, ...)
     va_list argptr;
     va_start(argptr, err_fmt);
     
-    STRING_BUFFER *error = string_buff_init(200);
-    string_buff_append_str(error, "NeedlemanWunsch Error: ");
-    string_buff_vsprintf(error, string_buff_strlen(error), err_fmt, argptr);
-    string_buff_chomp(error);
+    StrBuf *error = strbuf_init(200);
+    strbuf_append_str(error, "NeedlemanWunsch Error: ");
+    strbuf_vsprintf(error, strbuf_len(error), err_fmt, argptr);
+    strbuf_chomp(error);
 
     va_end(argptr);
 
@@ -279,10 +279,10 @@ void align(char *seq_a, char *seq_b,
 // Otherwise read an entry from each
 void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
 {
-  STRING_BUFFER *entry1_title = string_buff_init(200);
-  STRING_BUFFER *entry2_title = string_buff_init(200);
-  STRING_BUFFER *entry1_seq = string_buff_init(200);
-  STRING_BUFFER *entry2_seq = string_buff_init(200);
+  StrBuf *entry1_title = strbuf_init(200);
+  StrBuf *entry2_title = strbuf_init(200);
+  StrBuf *entry1_seq = strbuf_init(200);
+  StrBuf *entry2_seq = strbuf_init(200);
 
   // Complain if nothing is read in
   char empty_file = 1;
@@ -343,10 +343,10 @@ void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
   }
 
   // Free memory
-  string_buff_free(entry1_title);
-  string_buff_free(entry2_title);
-  string_buff_free(entry1_seq);
-  string_buff_free(entry2_seq);
+  strbuf_free(entry1_title);
+  strbuf_free(entry2_title);
+  strbuf_free(entry1_seq);
+  strbuf_free(entry2_seq);
 }
 
 int main(int argc, char* argv[])
