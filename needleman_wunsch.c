@@ -21,11 +21,10 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <limits.h>
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 
 #include "needleman_wunsch.h"
 
@@ -122,7 +121,7 @@ char find_end_max(score_t *score_arr,
 
 // Alignment between two sequences using needleman-wunsch and a given
 // scoring system
-int needleman_wunsch(char* seq_a, char* seq_b,
+int needleman_wunsch(const char* seq_a, const char* seq_b,
                      char* alignment_a, char* alignment_b,
                      SCORING_SYSTEM* scoring)
 {
@@ -227,38 +226,55 @@ int needleman_wunsch(char* seq_a, char* seq_b,
       // Update match_score[i][j] with position [i-1][j-1]
       // Addressing array must be done with unsigned long
       unsigned long new_index = (unsigned long)j*score_width + i;
-      unsigned long old_index = (unsigned long)(j-1)*score_width + (i-1);
+      unsigned long old_index;
       
-      // substitution penalty
-      int substitution_penalty = scoring_lookup(scoring,
-                                                seq_a[seq_i],
-                                                seq_b[seq_j]);
+      if(scoring->no_mismatches && seq_a[seq_i] != seq_b[seq_j] &&
+         !scoring_check_wildcards(scoring, seq_a[seq_i], seq_b[seq_j]))
+      {
+        match_score[new_index] = 0;
+      }
+      else
+      {
+        old_index = (unsigned long)(j-1)*score_width + (i-1);
 
-      // substitution
-      match_score[new_index]
-        = max((long)match_score[old_index], // continue alignment
-              (long)gap_a_score[old_index], // close gap in seq_a
-              (long)gap_b_score[old_index]) // close gap in seq_b
-          + substitution_penalty;
-                                     
+        // substitution penalty
+        int substitution_penalty = scoring_lookup(scoring,
+                                                  seq_a[seq_i],
+                                                  seq_b[seq_j]);
+
+        // substitution
+        match_score[new_index]
+          = max((long)match_score[old_index], // continue alignment
+                (long)gap_a_score[old_index], // close gap in seq_a
+                (long)gap_b_score[old_index]) // close gap in seq_b
+            + substitution_penalty;
+      }                                     
       
-      // Update gap_a_score[i][j] from position [i][j-1]
-      old_index = (unsigned long)(j-1)*score_width + i;
+      if(scoring->no_gaps)
+      {
+        gap_a_score[new_index] = 0;
+        gap_b_score[new_index] = 0;
+      }
+      else
+      {
+        // Update gap_a_score[i][j] from position [i][j-1]
+        old_index = (unsigned long)(j-1)*score_width + i;
+        
+        // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
+        // (adding as ints would cause an integer overflow)
+        gap_a_score[new_index]
+          = max((long)match_score[old_index] + gap_open_penalty,
+                (long)gap_a_score[old_index] + scoring->gap_extend,
+                (long)gap_b_score[old_index] + gap_open_penalty);
       
-      // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
-      // (adding as ints would cause an integer overflow)
-      gap_a_score[new_index]
-        = max((long)match_score[old_index] + gap_open_penalty,
-              (long)gap_a_score[old_index] + scoring->gap_extend,
-              (long)gap_b_score[old_index] + gap_open_penalty);
-    
-      // Update gap_b_score[i][j] from position [i-1][j]
-      old_index = (unsigned long)j*score_width + (i-1);
-      
-      gap_b_score[new_index]
-        = max((long)match_score[old_index] + gap_open_penalty,
-              (long)gap_a_score[old_index] + gap_open_penalty,
-              (long)gap_b_score[old_index] + scoring->gap_extend);
+        // Update gap_b_score[i][j] from position [i-1][j]
+        old_index = (unsigned long)j*score_width + (i-1);
+        
+        gap_b_score[new_index]
+          = max((long)match_score[old_index] + gap_open_penalty,
+                (long)gap_a_score[old_index] + gap_open_penalty,
+                (long)gap_b_score[old_index] + scoring->gap_extend);
+      }
     }
   }
   

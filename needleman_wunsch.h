@@ -35,7 +35,7 @@ char nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b)
 
 /* Alignment */
 
-int needleman_wunsch(char* seq_a, char* seq_b,
+int needleman_wunsch(const char* seq_a, const char* seq_b,
                      char* alignment_a, char* alignment_b,
                      SCORING_SYSTEM* scoring);
 

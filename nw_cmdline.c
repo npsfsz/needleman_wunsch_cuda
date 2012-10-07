@@ -30,11 +30,12 @@
 
 // my utility functions
 #include "string_buffer.h"
-#include "bioinf.h"
+#include "seq_file.h"
 #include "utility_lib.h"
 
 // Alignment scoring and loading
 #include "alignment_scoring_load.h"
+#include "alignment_cmdline.h"
 
 #include "needleman_wunsch.h"
 
@@ -48,11 +49,6 @@ SCORING_SYSTEM* scoring = NULL;
 // Alignment results stored here
 char *alignment_a = NULL, *alignment_b = NULL;
 t_buf_pos alignment_max_length;
-
-// File loading
-int file_list_length = 0;
-int file_list_capacity = 10;
-char **file_paths1, **file_paths2;
 
 void set_default_scoring()
 {
@@ -97,18 +93,24 @@ void print_usage(char* err_fmt, ...)
 "    --file <file>        Sequence file reading with gzip support\n"
 "    --files <f1> <f2>    Read one sequence from each file at a time to align\n"
 "    --stdin              Read from STDIN (same as '--file -')\n"
-"    --case_sensitive     Case sensitive character comparison\n"
 "\n"
-"    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
-"    --substitution_matrix <file>  see details for formatting\n"
-"    --substitution_pairs <file>   see details for formatting\n"
+"    --case_sensitive     Case sensitive character comparison\n"
 "\n");
 
   fprintf(stderr,
 "    --match <score>      [default: %i]\n"
 "    --mismatch <score>   [default: %i]\n"
 "    --gapopen <score>    [default: %i]\n"
-"    --gapextend <score>  [default: %i]\n",
+"    --gapextend <score>  [default: %i]\n"
+"\n"
+"    --nogaps             No gaps allowed in the alignment\n"
+"    --nomismatches       No mismatches allowed - not to be used with --nogaps\n"
+"\n"
+"    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
+"    --substitution_matrix <file>  see details for formatting\n"
+"    --substitution_pairs <file>   see details for formatting\n"
+"\n"
+"    --wildcard <w> <s>   Character <w> matches all characters with score <s>\n",
           scoring->match, scoring->mismatch,
           scoring->gap_open, scoring->gap_extend);
 
@@ -126,32 +128,16 @@ void print_usage(char* err_fmt, ...)
 " DETAILS:\n"
 "  * For help choosing scoring, see the README file. \n"
 "  * Gap (of length N) penalty is: (open+N*extend)\n"
-"  * To do alignment without affine gap, set '--gapopen 0'.\n"
+//"  * To do alignment without affine gap, set '--gapopen 0'.\n"
 "  * Scoring files should be matrices, with entries separated by a single \n"
 "    character or whitespace.  See files in the 'scores' directory for examples.\n"
 "\n"
-"  turner.isaac@gmail.com  (compiled: "COMPILE_TIME")\n");
+"  turner.isaac@gmail.com  (compiled: %s %s)\n", __DATE__, __TIME__);
 
   exit(EXIT_FAILURE);
 }
 
-void check_file_array_lengths()
-{
-  if(file_list_length == file_list_capacity)
-  {
-    // Expand arrays used for holding file paths
-    file_list_capacity *= 2;
-    file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
-    file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
-
-    if(file_paths1 == NULL || file_paths2 == NULL)
-    {
-      print_usage("Ran out of memory taking file arguments!\n");
-    }
-  }
-}
-
-void align_zam(char *seq_a, char *seq_b)
+void align_zam(const char *seq_a, const char *seq_b)
 {
   needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
 
@@ -207,8 +193,8 @@ void align_zam(char *seq_a, char *seq_b)
   printf("%i %i\n\n", num_of_mismatches, num_of_indels);
 }
 
-void align(char *seq_a, char *seq_b,
-           char *seq_a_name, char *seq_b_name)
+void align(const char *seq_a, const char *seq_b,
+           const char *seq_a_name, const char *seq_b_name)
 {
   if(print_zam)
   {
@@ -275,78 +261,25 @@ void align(char *seq_a, char *seq_b,
   fflush(stdout);
 }
 
-// If seq2 is NULL, read pair of entries from first file
-// Otherwise read an entry from each
-void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
+void align_pair_from_file(StrBuf *seq1, StrBuf *seq2,
+                          const char *seq1_name, const char *seq2_name)
 {
-  StrBuf *entry1_title = strbuf_init(200);
-  StrBuf *entry2_title = strbuf_init(200);
-  StrBuf *entry1_seq = strbuf_init(200);
-  StrBuf *entry2_seq = strbuf_init(200);
+  // Check memory
+  t_buf_pos new_max_alignment = seq1->len + seq2->len;
 
-  // Complain if nothing is read in
-  char empty_file = 1;
-
-  while(1)
+  if(new_max_alignment > alignment_max_length)
   {
-    if(!seq_file_read(seq1, entry1_title, entry1_seq))
+    // Expand memory used for storing result
+    alignment_max_length = new_max_alignment;
+
+    if(!nw_realloc_mem((unsigned int)new_max_alignment,
+                       &alignment_a, &alignment_b))
     {
-      break;
+      print_usage("Ran out of memory");
     }
-    else
-    {
-      // Read something in
-      empty_file = 0;
-    }
-
-    if(!seq_file_read((seq2 == NULL ? seq1 : seq2), entry2_title, entry2_seq))
-    {
-      fprintf(stderr, "Odd number of sequences - I read in pairs!\n");
-      break;
-    }
-
-    // Align
-    char *title1 = NULL, *title2 = NULL;
-
-    if(seq_file_get_type(seq1) != SEQ_PLAIN)
-    {
-      title1 = entry1_title->buff;
-    }
-
-    if(seq2 == NULL ? seq_file_get_type(seq1) != SEQ_PLAIN
-                    : seq_file_get_type(seq2) != SEQ_PLAIN)
-    {
-      title2 = entry2_title->buff;
-    }
-
-    // Check memory
-    t_buf_pos new_max_alignment = entry1_seq->len + entry2_seq->len;
-
-    if(new_max_alignment > alignment_max_length)
-    {
-      // Expand memory used for storing result
-      alignment_max_length = new_max_alignment;
-
-      if(!nw_realloc_mem((unsigned int)new_max_alignment,
-                         &alignment_a, &alignment_b))
-      {
-        print_usage("Ran out of memory");
-      }
-    }
-
-    align(entry1_seq->buff, entry2_seq->buff, title1, title2);
   }
 
-  if(empty_file)
-  {
-    fprintf(stderr, "NeedlemanWunsch: Warning, empty input\n");
-  }
-
-  // Free memory
-  strbuf_free(entry1_title);
-  strbuf_free(entry2_title);
-  strbuf_free(entry1_seq);
-  strbuf_free(entry2_seq);
+  align(seq1->buff, seq2->buff, seq1_name, seq2_name);
 }
 
 int main(int argc, char* argv[])
@@ -368,9 +301,7 @@ int main(int argc, char* argv[])
 
   char *seq1 = NULL, *seq2 = NULL;
 
-  // Initialise arrays
-  file_paths1 = (char**)malloc(sizeof(char*)*file_list_capacity);
-  file_paths2 = (char**)malloc(sizeof(char*)*file_list_capacity);
+  cmdline_init();
 
   scoring = NULL;
   char case_sensitive = 0;
@@ -455,6 +386,14 @@ int main(int argc, char* argv[])
       {
         scoring->no_end_gap_penalty = 1;
       }
+      else if(strcasecmp(argv[argi], "--nogaps") == 0)
+      {
+        scoring->no_gaps = 1;
+      }
+      else if(strcasecmp(argv[argi], "--nomismatches") == 0)
+      {
+        scoring->no_mismatches = 1;
+      }
       else if(strcasecmp(argv[argi], "--case_sensitive") == 0)
       {
         // Already dealt with
@@ -483,10 +422,7 @@ int main(int argc, char* argv[])
       else if(strcasecmp(argv[argi], "--stdin") == 0)
       {
         // Similar to --file argument below
-        check_file_array_lengths();
-
-        file_paths1[file_list_length] = "-";
-        file_paths2[file_list_length++] = NULL;
+        cmdline_add_files("-", NULL);
       }
       else if(argi == argc-1)
       {
@@ -570,32 +506,39 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--file") == 0)
       {
-        check_file_array_lengths();
-
-        file_paths1[file_list_length] = argv[argi+1];
-        file_paths2[file_list_length++] = NULL;
+        cmdline_add_files(argv[argi+1], NULL);
         argi++; // took an argument
       }
       // Remaining options take two arguments but check themselves
       else if(strcasecmp(argv[argi], "--files") == 0)
       {
-        check_file_array_lengths();
-
-        if(argi == argc-2)
+        if(argi >= argc-2)
         {
           print_usage("--files option takes 2 arguments");
         }
         else if(strcmp(argv[argi+1], "-") == 0 && strcmp(argv[argi+2], "-") == 0)
         {
           // Read both from stdin
-          file_paths1[file_list_length] = argv[argi+1];
-          file_paths2[file_list_length++] = NULL;
+          cmdline_add_files(argv[argi+1], NULL);
         }
         else
         {
-          file_paths1[file_list_length] = argv[argi+1];
-          file_paths2[file_list_length++] = argv[argi+2];
+          cmdline_add_files(argv[argi+1], argv[argi+2]);
         }
+
+        argi += 2; // took two arguments
+      }
+      else if(strcasecmp(argv[argi], "--wildcard") == 0)
+      {
+        int wildscore = 0;
+
+        if(argi == argc-2 || strlen(argv[argi+1]) != 1 ||
+           !parse_entire_int(argv[argi+2], &wildscore))
+        {
+          print_usage("--wildcard <w> <s> takes a single character and a number");
+        }
+
+        scoring_add_wildcard(scoring, argv[argi+1][0], wildscore);
 
         argi += 2; // took two arguments
       }
@@ -625,6 +568,17 @@ int main(int argc, char* argv[])
     scoring->use_match_mismatch = 0;
   }
 
+  if(scoring->no_gaps && scoring->no_mismatches)
+  {
+    print_usage("--nogaps --nomismatches cannot be used at together");
+  }
+
+  if(scoring->no_gaps)
+  {
+    scoring->no_start_gap_penalty = 1;
+    scoring->no_end_gap_penalty = 1;
+  }
+
   // Check for extra unused arguments
   // and set seq1 and seq2 if they have been passed
   if(argi < argc)
@@ -632,6 +586,8 @@ int main(int argc, char* argv[])
     seq1 = argv[argi];
     seq2 = argv[argi+1];
   }
+
+  int file_list_length = cmdline_get_num_of_file_pairs();
 
   if(seq1 == NULL && file_list_length == 0)
   {
@@ -663,21 +619,12 @@ int main(int argc, char* argv[])
   int i;
   for(i = 0; i < file_list_length; i++)
   {
-    // Read file(s)
-    SEQ_FILE *seq1 = seq_open_cmd_arg(file_paths1[i]);
-    SEQ_FILE *seq2 = seq_open_cmd_arg(file_paths2[i]);
-
     // Align from files
-    align_from_file(seq1, seq2);
-
-    // Close files
-    seq_close_cmd_arg(seq1, file_paths1[i]);
-    seq_close_cmd_arg(seq2, file_paths2[i]);
+    align_from_file(cmdline_get_file1(i), cmdline_get_file2(i),
+                    &align_pair_from_file);
   }
 
-  // Free arrays of file paths
-  free(file_paths1);
-  free(file_paths2);
+  cmdline_finish();
 
   // Free memory for storing alignment results
   free(alignment_a);
