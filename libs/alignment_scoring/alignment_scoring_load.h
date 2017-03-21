@@ -1,10 +1,15 @@
 /*
- needleman_wunsch.h
- project: NeedlemanWunsch
+ alignment_scoring_load.h
+ project: AlignmentScoring
  author: Isaac Turner <turner.isaac@gmail.com>
+ Used in SmithWaterman and NeedlemanWunsch projects
  url: http://sourceforge.net/projects/needlemanwunsch
+ url: http://sourceforge.net/projects/smithwaterman
  Copyright (C) 06-Dec-2011
  
+ see: README
+
+ == License
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation, either version 3 of the License, or
@@ -19,24 +24,16 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef ALIGNMENT_SCORING_LOAD_HEADER_SEEN
+#define ALIGNMENT_SCORING_LOAD_HEADER_SEEN
 
-#ifndef NEEDLEMAN_WUNSCH_HEADER_SEEN
-#define NEEDLEMAN_WUNSCH_HEADER_SEEN
+#include <zlib.h>
+#include "alignment_scoring.h"
 
-#include "alignment.h"
+void align_scoring_load_matrix(gzFile file, char* file_path,
+                               SCORING_SYSTEM* scoring, char case_sensitive);
 
-// alloc memory for result (returns length of seq_a + seq_b)
-int nw_alloc_mem(const char* seq_a, const char* seq_b,
-                 char** alignment_a, char** alignment_b);
-
-// length is = length_a + length_b
-// Returns 1 on success, 0 on failure
-char nw_realloc_mem(unsigned int length, char** alignment_a, char** alignment_b);
-
-/* Alignment */
-
-int needleman_wunsch(char* seq_a, char* seq_b,
-                     char* alignment_a, char* alignment_b,
-                     SCORING_SYSTEM* scoring);
+void align_scoring_load_pairwise(gzFile file, char* file_path,
+                                 SCORING_SYSTEM* scoring, char case_sensitive);
 
 #endif

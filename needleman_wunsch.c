@@ -21,10 +21,11 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <limits.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <limits.h>
 
 #include "needleman_wunsch.h"
 
@@ -86,14 +87,12 @@ char find_end_max(score_t *score_arr,
                   score_t *curr_score,
                   unsigned int *seq_i, unsigned int *seq_j)
 {
-  unsigned int i, j;
-  score_t temp;
+  unsigned int i, j, temp;
   char updated = 0;
 
   for(i = 1; i <= length_a; i++)
   {
     temp = ARR_LOOKUP(score_arr, length_a+1, i, length_b);
-
     if(temp > *curr_score)
     {
       *curr_score = temp;
@@ -106,7 +105,6 @@ char find_end_max(score_t *score_arr,
   for(j = 1; j <= length_b; j++)
   {
     temp = ARR_LOOKUP(score_arr, length_a+1, length_a, j);
-
     if(temp > *curr_score)
     {
       *curr_score = temp;
@@ -121,7 +119,7 @@ char find_end_max(score_t *score_arr,
 
 // Alignment between two sequences using needleman-wunsch and a given
 // scoring system
-int needleman_wunsch(const char* seq_a, const char* seq_b,
+int needleman_wunsch(char* seq_a, char* seq_b,
                      char* alignment_a, char* alignment_b,
                      SCORING_SYSTEM* scoring)
 {
@@ -226,55 +224,38 @@ int needleman_wunsch(const char* seq_a, const char* seq_b,
       // Update match_score[i][j] with position [i-1][j-1]
       // Addressing array must be done with unsigned long
       unsigned long new_index = (unsigned long)j*score_width + i;
-      unsigned long old_index;
+      unsigned long old_index = (unsigned long)(j-1)*score_width + (i-1);
       
-      if(scoring->no_mismatches && seq_a[seq_i] != seq_b[seq_j] &&
-         !scoring_check_wildcards(scoring, seq_a[seq_i], seq_b[seq_j]))
-      {
-        match_score[new_index] = 0;
-      }
-      else
-      {
-        old_index = (unsigned long)(j-1)*score_width + (i-1);
+      // substitution penalty
+      int substitution_penalty = scoring_lookup(scoring,
+                                                seq_a[seq_i],
+                                                seq_b[seq_j]);
 
-        // substitution penalty
-        int substitution_penalty = scoring_lookup(scoring,
-                                                  seq_a[seq_i],
-                                                  seq_b[seq_j]);
-
-        // substitution
-        match_score[new_index]
-          = max((long)match_score[old_index], // continue alignment
-                (long)gap_a_score[old_index], // close gap in seq_a
-                (long)gap_b_score[old_index]) // close gap in seq_b
-            + substitution_penalty;
-      }                                     
+      // substitution
+      match_score[new_index]
+        = max((long)match_score[old_index], // continue alignment
+              (long)gap_a_score[old_index], // close gap in seq_a
+              (long)gap_b_score[old_index]) // close gap in seq_b
+          + substitution_penalty;
+                                     
       
-      if(scoring->no_gaps)
-      {
-        gap_a_score[new_index] = 0;
-        gap_b_score[new_index] = 0;
-      }
-      else
-      {
-        // Update gap_a_score[i][j] from position [i][j-1]
-        old_index = (unsigned long)(j-1)*score_width + i;
-        
-        // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
-        // (adding as ints would cause an integer overflow)
-        gap_a_score[new_index]
-          = max((long)match_score[old_index] + gap_open_penalty,
-                (long)gap_a_score[old_index] + scoring->gap_extend,
-                (long)gap_b_score[old_index] + gap_open_penalty);
+      // Update gap_a_score[i][j] from position [i][j-1]
+      old_index = (unsigned long)(j-1)*score_width + i;
       
-        // Update gap_b_score[i][j] from position [i-1][j]
-        old_index = (unsigned long)j*score_width + (i-1);
-        
-        gap_b_score[new_index]
-          = max((long)match_score[old_index] + gap_open_penalty,
-                (long)gap_a_score[old_index] + gap_open_penalty,
-                (long)gap_b_score[old_index] + scoring->gap_extend);
-      }
+      // Long arithmetic since some INTs are set to INT_MIN and penalty is -ve
+      // (adding as ints would cause an integer overflow)
+      gap_a_score[new_index]
+        = max((long)match_score[old_index] + gap_open_penalty,
+              (long)gap_a_score[old_index] + scoring->gap_extend,
+              (long)gap_b_score[old_index] + gap_open_penalty);
+    
+      // Update gap_b_score[i][j] from position [i-1][j]
+      old_index = (unsigned long)j*score_width + (i-1);
+      
+      gap_b_score[new_index]
+        = max((long)match_score[old_index] + gap_open_penalty,
+              (long)gap_a_score[old_index] + gap_open_penalty,
+              (long)gap_b_score[old_index] + scoring->gap_extend);
     }
   }
   
@@ -326,14 +307,14 @@ int needleman_wunsch(const char* seq_a, const char* seq_b,
     #endif
     
     // Fill in last gap
-    unsigned int i;
+    int i;
     for(i = length_a - 1; i > seq_i; i--, next_char--)
     {
       alignment_a[next_char] = seq_a[i];
       alignment_b[next_char] = '-';
     }
 
-    unsigned int j;
+    int j;
     for(j = length_b - 1; j > seq_j; j--, next_char--)
     {
       alignment_a[next_char] = '-';

@@ -1,36 +1,35 @@
-LIBS_PATH=../../libs
-
-ifndef CC
-	CC = gcc
-endif
+LIBS_PATH=./libs
 
 ifdef DEBUG
-	CFLAGS := -DDEBUG=1 --debug -g
+	FLAGS=-DDEBUG=1 --debug
 else
-	CFLAGS := -O3
+	FLAGS=-O3
 endif
 
-UTILITY_LIB_PATH = $(LIBS_PATH)/utility_lib
-STRING_BUF_PATH = $(LIBS_PATH)/string_buffer
-BIT_ARRAY_PATH = $(LIBS_PATH)/bit_array
-SEQ_FILE_PATH = $(LIBS_PATH)/seq_file
-SCORING_PATH = $(LIBS_PATH)/alignment_scoring
-SAMTOOLS_PATH = $(HOME)/bioinf/samtools-0.1.18
+UTILITY_LIB_PATH := $(LIBS_PATH)/utility_lib
+STRING_BUF_PATH := $(LIBS_PATH)/string_buffer
+BIOINF_LIB_PATH := $(LIBS_PATH)/bioinf
+SCORING_PATH := $(LIBS_PATH)/alignment_scoring
 
-# Add data type for alignment scoring
-CFLAGS := $(CFLAGS) -Wall -Wextra -DSCORE_TYPE='unsigned int' \
-         -I$(SCORING_PATH) -I$(SEQ_FILE_PATH) -I$(UTILITY_LIB_PATH) \
-         -I$(BIT_ARRAY_PATH) -I$(STRING_BUF_PATH) -I$(SAMTOOLS_PATH) -I.
+# Check mac/linux
+UNAME := $(shell uname)
 
-LIB_INCS = -L$(SCORING_PATH) -L$(SEQ_FILE_PATH) -L$(UTILITY_LIB_PATH) \
-           -L$(BIT_ARRAY_PATH) -L$(STRING_BUF_PATH) -L$(SAMTOOLS_PATH) -L.
+ifeq ($(UNAME), Darwin)
+	FLAGS := $(FLAGS) -fnested-functions
+endif
 
-LIB_LIST = -lseqfile -lstrbuf -lbitarr -lbam -lutil -lz
-
-FILES = nw_cmdline.c needleman_wunsch.c $(SCORING_PATH)/*.c
+# Add compile time
+FLAGS := $(FLAGS) -DCOMPILE_TIME='"$(shell date)"' -DSCORE_TYPE='int'
 
 all:
-	$(CC) -o needleman_wunsch $(CFLAGS) $(LIB_INCS) $(FILES) $(LIB_LIST)
+	gcc -o needleman_wunsch $(FLAGS) -Wall \
+	-I . -I $(UTILITY_LIB_PATH) -I $(STRING_BUF_PATH) \
+	-I $(BIOINF_LIB_PATH) -I $(SCORING_PATH) \
+	nw_cmdline.c needleman_wunsch.c \
+	$(SCORING_PATH)/*.c $(UTILITY_LIB_PATH)/utility_lib.c \
+	$(BIOINF_LIB_PATH)/bioinf.c $(STRING_BUF_PATH)/string_buffer.c -lz
 
 clean:
-	rm -rf needleman_wunsch needleman_wunsch.dSYM needleman_wunsch.greg
+	if test -e needleman_wunsch; then rm needleman_wunsch; fi
+	for file in $(wildcard *.dSYM); do rm -r $$file; done
+	for file in $(wildcard *.greg); do rm $$file; done

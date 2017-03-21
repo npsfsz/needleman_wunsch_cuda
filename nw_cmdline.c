@@ -30,12 +30,11 @@
 
 // my utility functions
 #include "string_buffer.h"
-#include "seq_file.h"
+#include "bioinf.h"
 #include "utility_lib.h"
 
 // Alignment scoring and loading
 #include "alignment_scoring_load.h"
-#include "alignment_cmdline.h"
 
 #include "needleman_wunsch.h"
 
@@ -50,6 +49,7 @@ SCORING_SYSTEM* scoring = NULL;
 char *alignment_a = NULL, *alignment_b = NULL;
 t_buf_pos alignment_max_length;
 
+
 void set_default_scoring()
 {
   scoring = scoring_system_default();
@@ -62,10 +62,10 @@ void print_usage(char* err_fmt, ...)
     va_list argptr;
     va_start(argptr, err_fmt);
     
-    StrBuf *error = strbuf_init(200);
-    strbuf_append_str(error, "NeedlemanWunsch Error: ");
-    strbuf_vsprintf(error, strbuf_len(error), err_fmt, argptr);
-    strbuf_chomp(error);
+    STRING_BUFFER *error = string_buff_init(200);
+    string_buff_append_str(error, "NeedlemanWunsch Error: ");
+    string_buff_vsprintf(error, string_buff_strlen(error), err_fmt, argptr);
+    string_buff_chomp(error);
 
     va_end(argptr);
 
@@ -93,24 +93,18 @@ void print_usage(char* err_fmt, ...)
 "    --file <file>        Sequence file reading with gzip support\n"
 "    --files <f1> <f2>    Read one sequence from each file at a time to align\n"
 "    --stdin              Read from STDIN (same as '--file -')\n"
-"\n"
 "    --case_sensitive     Case sensitive character comparison\n"
+"\n"
+"    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
+"    --substitution_matrix <file>  see details for formatting\n"
+"    --substitution_pairs <file>   see details for formatting\n"
 "\n");
 
   fprintf(stderr,
 "    --match <score>      [default: %i]\n"
 "    --mismatch <score>   [default: %i]\n"
 "    --gapopen <score>    [default: %i]\n"
-"    --gapextend <score>  [default: %i]\n"
-"\n"
-"    --nogaps             No gaps allowed in the alignment\n"
-"    --nomismatches       No mismatches allowed - not to be used with --nogaps\n"
-"\n"
-"    --scoring <PAM30|PAM70|BLOSUM80|BLOSUM62>\n"
-"    --substitution_matrix <file>  see details for formatting\n"
-"    --substitution_pairs <file>   see details for formatting\n"
-"\n"
-"    --wildcard <w> <s>   Character <w> matches all characters with score <s>\n",
+"    --gapextend <score>  [default: %i]\n",
           scoring->match, scoring->mismatch,
           scoring->gap_open, scoring->gap_extend);
 
@@ -128,16 +122,16 @@ void print_usage(char* err_fmt, ...)
 " DETAILS:\n"
 "  * For help choosing scoring, see the README file. \n"
 "  * Gap (of length N) penalty is: (open+N*extend)\n"
-//"  * To do alignment without affine gap, set '--gapopen 0'.\n"
+"  * To do alignment without affine gap, set '--gapopen 0'.\n"
 "  * Scoring files should be matrices, with entries separated by a single \n"
 "    character or whitespace.  See files in the 'scores' directory for examples.\n"
 "\n"
-"  turner.isaac@gmail.com  (compiled: %s %s)\n", __DATE__, __TIME__);
+"  turner.isaac@gmail.com  (compiled: "COMPILE_TIME")\n");
 
   exit(EXIT_FAILURE);
 }
 
-void align_zam(const char *seq_a, const char *seq_b)
+void align_zam(char *seq_a, char *seq_b)
 {
   needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
 
@@ -193,14 +187,12 @@ void align_zam(const char *seq_a, const char *seq_b)
   printf("%i %i\n\n", num_of_mismatches, num_of_indels);
 }
 
-void align(const char *seq_a, const char *seq_b,
-           const char *seq_a_name, const char *seq_b_name)
+void align(char *seq_a, char *seq_b,
+           char *seq_a_name, char *seq_b_name)
 {
   if(print_zam)
   {
-    align_zam(seq_a, seq_b);
-    fflush(stdout);
-    return;
+    return align_zam(seq_a, seq_b);
   }
 
   int score = needleman_wunsch(seq_a, seq_b, alignment_a, alignment_b, scoring);
@@ -257,29 +249,82 @@ void align(const char *seq_a, const char *seq_b,
   }
   
   printf("\n");
-
-  fflush(stdout);
 }
 
-void align_pair_from_file(StrBuf *seq1, StrBuf *seq2,
-                          const char *seq1_name, const char *seq2_name)
+// If seq2 is NULL, read pair of entries from first file
+// Otherwise read an entry from each
+void align_from_file(SEQ_FILE *seq1, SEQ_FILE *seq2)
 {
-  // Check memory
-  t_buf_pos new_max_alignment = seq1->len + seq2->len;
+  STRING_BUFFER *entry1_title = string_buff_init(200);
+  STRING_BUFFER *entry2_title = string_buff_init(200);
+  STRING_BUFFER *entry1_seq = string_buff_init(200);
+  STRING_BUFFER *entry2_seq = string_buff_init(200);
 
-  if(new_max_alignment > alignment_max_length)
+  char empty_file = 1;
+
+  while(1)
   {
-    // Expand memory used for storing result
-    alignment_max_length = new_max_alignment;
+    seq_file_read(seq1, entry1_title, entry1_seq);
 
-    if(!nw_realloc_mem((unsigned int)new_max_alignment,
-                       &alignment_a, &alignment_b))
+    if(string_buff_strlen(entry1_seq) == 0)
     {
-      print_usage("Ran out of memory");
+      break;
     }
+    else
+    {
+      empty_file = 0;
+    }
+
+    seq_file_read((seq2 == NULL ? seq1 : seq2), entry2_title, entry2_seq);
+
+    if(string_buff_strlen(entry2_seq) == 0)
+    {
+      fprintf(stderr, "Odd number of sequences - I read in pairs!\n");
+      break;
+    }
+
+    // Align
+    char *title1 = NULL, *title2 = NULL;
+
+    if(seq_file_get_type(seq1) != SEQ_PLAIN)
+    {
+      title1 = entry1_title->buff;
+    }
+
+    if((seq2 == NULL && seq_file_get_type(seq1) != SEQ_PLAIN) ||
+       (seq2 != NULL && seq_file_get_type(seq2) != SEQ_PLAIN))
+    {
+      title2 = entry2_title->buff;
+    }
+
+    // Check memory
+    t_buf_pos new_max_alignment = entry1_seq->len + entry2_seq->len;
+
+    if(new_max_alignment > alignment_max_length)
+    {
+      // Expand memory used for storing result
+      alignment_max_length = new_max_alignment;
+
+      if(!nw_realloc_mem((unsigned int)new_max_alignment,
+                         &alignment_a, &alignment_b))
+      {
+        print_usage("Ran out of memory");
+      }
+    }
+
+    align(entry1_seq->buff, entry2_seq->buff, title1, title2);
   }
 
-  align(seq1->buff, seq2->buff, seq1_name, seq2_name);
+  if(empty_file)
+  {
+    fprintf(stderr, "NeedlemanWunsch: Warning, empty input\n");
+  }
+
+  // Free memory
+  string_buff_free(entry1_title);
+  string_buff_free(entry2_title);
+  string_buff_free(entry1_seq);
+  string_buff_free(entry2_seq);
 }
 
 int main(int argc, char* argv[])
@@ -301,7 +346,12 @@ int main(int argc, char* argv[])
 
   char *seq1 = NULL, *seq2 = NULL;
 
-  cmdline_init();
+  char read_stdin = 0;
+
+  int file_list_length = 0;
+  int file_list_capacity = 10;
+  char** file_paths1 = (char**)malloc(sizeof(char*)*file_list_capacity);
+  char** file_paths2 = (char**)malloc(sizeof(char*)*file_list_capacity);
 
   scoring = NULL;
   char case_sensitive = 0;
@@ -386,14 +436,6 @@ int main(int argc, char* argv[])
       {
         scoring->no_end_gap_penalty = 1;
       }
-      else if(strcasecmp(argv[argi], "--nogaps") == 0)
-      {
-        scoring->no_gaps = 1;
-      }
-      else if(strcasecmp(argv[argi], "--nomismatches") == 0)
-      {
-        scoring->no_mismatches = 1;
-      }
       else if(strcasecmp(argv[argi], "--case_sensitive") == 0)
       {
         // Already dealt with
@@ -421,8 +463,7 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--stdin") == 0)
       {
-        // Similar to --file argument below
-        cmdline_add_files("-", NULL);
+        read_stdin = 1;
       }
       else if(argi == argc-1)
       {
@@ -436,7 +477,7 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--substitution_matrix") == 0)
       {
-        gzFile* sub_matrix_file = gzopen(argv[argi+1], "r");
+        gzFile sub_matrix_file = gzopen(argv[argi+1], "r");
         // gzbuffer(sub_matrix_file, 16384); // doesn't seem to work
 
         align_scoring_load_matrix(sub_matrix_file, argv[argi+1],
@@ -450,7 +491,7 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--substitution_pairs") == 0)
       {
-        gzFile* sub_pairs_file = gzopen(argv[argi+1], "r");
+        gzFile sub_pairs_file = gzopen(argv[argi+1], "r");
         //gzbuffer(sub_pairs_file, 16384); // doesn't seem to work
         
         align_scoring_load_pairwise(sub_pairs_file, argv[argi+1],
@@ -506,39 +547,58 @@ int main(int argc, char* argv[])
       }
       else if(strcasecmp(argv[argi], "--file") == 0)
       {
-        cmdline_add_files(argv[argi+1], NULL);
+        if(file_list_length == file_list_capacity)
+        {
+          // Expand arrays used for holding file paths
+          file_list_capacity *= 2;
+          file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
+          file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
+
+          if(file_paths1 == NULL || file_paths2 == NULL)
+          {
+            print_usage("Ran out of memory taking file arguments!\n");
+          }
+        }
+
+        file_paths1[file_list_length] = argv[argi+1];
+        file_paths2[file_list_length++] = NULL;
         argi++; // took an argument
       }
-      // Remaining options take two arguments but check themselves
+      //else if(argi == argc-2)
+      //{
+        // All the remaining options take an 2 extra arguments
+        //unknown_option(argv[argi]);
+      //}
       else if(strcasecmp(argv[argi], "--files") == 0)
       {
-        if(argi >= argc-2)
+        if(file_list_length == file_list_capacity)
+        {
+          // Expand arrays used for holding file paths
+          file_list_capacity *= 2;
+          file_paths1 = realloc(file_paths1, sizeof(char*)*file_list_capacity);
+          file_paths2 = realloc(file_paths2, sizeof(char*)*file_list_capacity);
+
+          if(file_paths1 == NULL || file_paths2 == NULL)
+          {
+            print_usage("Ran out of memory taking file arguments!\n");
+          }
+        }
+
+        if(argi == argc-2)
         {
           print_usage("--files option takes 2 arguments");
         }
         else if(strcmp(argv[argi+1], "-") == 0 && strcmp(argv[argi+2], "-") == 0)
         {
           // Read both from stdin
-          cmdline_add_files(argv[argi+1], NULL);
+          file_paths1[file_list_length] = argv[argi+1];
+          file_paths2[file_list_length++] = NULL;
         }
         else
         {
-          cmdline_add_files(argv[argi+1], argv[argi+2]);
+          file_paths1[file_list_length] = argv[argi+1];
+          file_paths2[file_list_length++] = argv[argi+2];
         }
-
-        argi += 2; // took two arguments
-      }
-      else if(strcasecmp(argv[argi], "--wildcard") == 0)
-      {
-        int wildscore = 0;
-
-        if(argi == argc-2 || strlen(argv[argi+1]) != 1 ||
-           !parse_entire_int(argv[argi+2], &wildscore))
-        {
-          print_usage("--wildcard <w> <s> takes a single character and a number");
-        }
-
-        scoring_add_wildcard(scoring, argv[argi+1][0], wildscore);
 
         argi += 2; // took two arguments
       }
@@ -568,17 +628,6 @@ int main(int argc, char* argv[])
     scoring->use_match_mismatch = 0;
   }
 
-  if(scoring->no_gaps && scoring->no_mismatches)
-  {
-    print_usage("--nogaps --nomismatches cannot be used at together");
-  }
-
-  if(scoring->no_gaps)
-  {
-    scoring->no_start_gap_penalty = 1;
-    scoring->no_end_gap_penalty = 1;
-  }
-
   // Check for extra unused arguments
   // and set seq1 and seq2 if they have been passed
   if(argi < argc)
@@ -587,9 +636,7 @@ int main(int argc, char* argv[])
     seq2 = argv[argi+1];
   }
 
-  int file_list_length = cmdline_get_num_of_file_pairs();
-
-  if(seq1 == NULL && file_list_length == 0)
+  if(seq1 == NULL && file_list_length == 0 && !read_stdin)
   {
     print_usage("No input specified");
   }
@@ -616,15 +663,39 @@ int main(int argc, char* argv[])
     alignment_b = (char*) malloc((alignment_max_length+1) * sizeof(char));
   }
 
+  if(read_stdin)
+  {
+    // Read from STDIN
+    // Cannot turn off buffering in zlib, so have to use FILE for stdin
+    //gzFile gz_file = gzdopen(fileno(stdin), "r");
+    //gzsetparams(gz_file, Z_NO_COMPRESSION, Z_DEFAULT_STRATEGY);
+    //SEQ_FILE* seq = seq_file_gzopen(gz_file);
+
+    SEQ_FILE* seq = seq_file_init(stdin);
+    align_from_file(seq, NULL);
+    seq_file_free(seq);
+
+    //gzclose(gz_file);
+  }
+
   int i;
   for(i = 0; i < file_list_length; i++)
   {
+    // Read file(s)
+    SEQ_FILE *seq1 = seq_open_cmd_arg(file_paths1[i]);
+    SEQ_FILE *seq2 = seq_open_cmd_arg(file_paths2[i]);
+
     // Align from files
-    align_from_file(cmdline_get_file1(i), cmdline_get_file2(i),
-                    &align_pair_from_file);
+    align_from_file(seq1, seq2);
+
+    // Close files
+    seq_close_cmd_arg(seq1, file_paths1[i]);
+    seq_close_cmd_arg(seq2, file_paths2[i]);
   }
 
-  cmdline_finish();
+  // Free arrays of file paths
+  free(file_paths1);
+  free(file_paths2);
 
   // Free memory for storing alignment results
   free(alignment_a);
