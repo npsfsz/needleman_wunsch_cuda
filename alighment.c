@@ -192,6 +192,7 @@ int main(void){
 
     for (int size = 512; size < 32768; size *= 2){
         //generate sequences
+        print("size is %d", size);
         char* h_seq_a = (char*) malloc(sizeof(char) * size);
         char* h_seq_b = (char*) malloc(sizeof(char) * size);
         generateSequence(h_seq_a, h_seq_b, size);
@@ -206,11 +207,8 @@ int main(void){
 
 
 
-        //time()
-        double time3 = CPUtime();
         //run alignment on GPU
-        double time4 = CPUtime();
-        printf("GPU alighment took %f\n\n", time4 - time3);
+        alighment_gpu(h_seq_a, h_seq_b, size);
 
 
     }
