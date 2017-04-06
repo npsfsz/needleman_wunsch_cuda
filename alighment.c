@@ -188,6 +188,7 @@ double CPUtime(){
        gettimeofday (&tp, NULL);
        return ((double)tp.tv_sec + (double)tp.tv_usec * 1e-6);
 }
+
 int main(void){
 
     for (int size = 512; size < 32768; size *= 2){
