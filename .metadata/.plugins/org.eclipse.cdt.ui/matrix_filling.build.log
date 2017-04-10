@@ -1,0 +1,21 @@
+17:34:26 **** Build of configuration Debug for project matrix_filling ****
+make all 
+Building file: ../alighment.c
+Invoking: NVCC Compiler
+/usr/local/cuda-8.0/bin/nvcc -G -g -O0 -gencode arch=compute_52,code=sm_52  -odir "." -M -o "alighment.d" "../alighment.c"
+/usr/local/cuda-8.0/bin/nvcc -G -g -O0 --compile  -x c -o  "alighment.o" "../alighment.c"
+nvcc warning : The 'compute_20', 'sm_20', and 'sm_21' architectures are deprecated, and may be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+../alighment.c: In function 'generateSequence':
+../alighment.c:130:5: error: 'for' loop initial declarations are only allowed in C99 or C11 mode
+     for (int i = 0; i < size; i++){
+subdir.mk:24: recipe for target 'alighment.o' failed
+     ^
+../alighment.c:130:5: note: use option -std=c99, -std=gnu99, -std=c11 or -std=gnu11 to compile your code
+../alighment.c: In function 'main':
+../alighment.c:194:5: error: 'for' loop initial declarations are only allowed in C99 or C11 mode
+     for (int size = 512; size < 32768; size *= 2){
+     ^
+make: *** [alighment.o] Error 1
+
+17:34:26 Build Finished (took 185ms)
+

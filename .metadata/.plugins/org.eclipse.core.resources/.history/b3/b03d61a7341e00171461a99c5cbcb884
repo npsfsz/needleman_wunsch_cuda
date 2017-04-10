@@ -1,0 +1,97 @@
+#include "alighment.h"
+__host__
+void alignment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
+{
+    char* d_seq_a, d_seq_b, d_matrix;
+    unsigned long int bytes = sizeof(int) * seq_size;
+    unsigned long int matrix_bytes = sizeof(int) * (seq_size+1) * (seq_size+1);
+    cudaMalloc((void**)d_seq_a, (size_t)bytes);
+    cudaMalloc((void**)d_seq_b, (size_t)bytes);
+    cudaMalloc((void**)d_matrix, (size_t)matrix_bytes);
+	cudaMemcpy(d_seq_a, h_seq_a, bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_seq_b, h_seq_b, bytes, cudaMemcpyHostToDevice);
+    cudaMemset(d_matrix, '\0', matrix_bytes);
+    
+    
+    //do the work
+    for (int blocks = 1; blocks <= 4; blocks *= 2){//launch with 1, 2, or 4 blocks
+        int block_size = 2048/blocks;
+        if (seq_size < block_size){
+            threads = seq_size;//assign jsut enough threads for each block
+        }else{
+            threads = 2048/blocks;//assign max threads
+        }
+
+        dim3 grid(blocks, 1 ,1);
+        dim3 block(threads, 1, 1);
+        
+ 		int max_block_step = 2 * blocks -1;
+ 		int mat_width = seq_size + 1;
+ 		double time1 =  CPUtime();
+        for (int block_step = 0; block_step < max_block_step; block_step++){
+
+			align<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width);
+
+        }
+		double time2 = CPUtime();
+		print("GPU reduction took %lu\n", time2-time1);
+    }
+    
+    cudaFree((void*) d_seq_a);
+    cudaFree((void*) d_seq_b);
+    cudaFree((void*) d_matrix);
+}
+
+__device__
+void align(char* seq_a, char* seq_b, char* matrix, int block_step, int block_width, int mat_width){
+
+
+    /****************
+    grid size 1,2,4 largest antidiagonal length 1,2,4
+    for each block step(1, 121, 1234321){
+    	at each block step, let certain block work
+    	for each thread step(0 to 2*blockwidth -1 ){
+    		index = tid
+    		while (index + numofthreads < stepsize){
+    			matrix[index] = max( , , )
+    			index += numofthreads
+    		}
+    	{
+    }
+     ****************/
+    int tid = threadIdx.x;
+
+    int max_thread_step = 2 * block_width - 1;
+
+    for (int thread_step = 0; thread_step < max_thread_step; thread_step++){
+
+    	int antidiagonal_index = tid;
+    	int num_threads = blockDim.x;
+    	while (antidiagonal_index + num_threads < thread_step){
+    	    // It's an indexing thing...
+    		//unsigned long new_index = (unsigned long)j*score_width + i;
+    		//first antidiagonal element index = thread step
+    		//matrix[1 * matrix_width + (thread step + 1)]
+    		//matrix[2 * matrix_width + (thread step    )]
+    		//matrix[3 * matrix_width + (thread step - 1)]
+    		//matrix[4 * matrix_width + (thread step - 2)]
+    		//matrix[5 * matrix_width + (thread step - 3)]
+    		//matrix[6 * matrix_width + (thread step - 4)]
+    		int mat_index = (1 + antidiagonal_index) * mat_width + 1 * (thread_step + 1 - antidiagonal_index);
+    		matrix[mat_index] = max(matrix[mat_index - mat_width - 1],
+    								matrix[mat_index - 1],
+    								matrix[mat_index - mat_width]);
+    		mat_index = mat_index + num_threads * matrix_width - num_threads;
+    	}
+
+    }
+
+}
+
+
+
+
+
+
+
+
