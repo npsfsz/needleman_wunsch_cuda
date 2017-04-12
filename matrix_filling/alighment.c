@@ -7,6 +7,9 @@
 #include <string.h>
 #include <limits.h>
 #include "alighment.h"
+#include <cuda.h>
+
+
 
 static long max(long a, long b, long c)
 {
@@ -29,8 +32,8 @@ void alighment_cpu (char* seq_a, char* seq_b)
   size_t length_b = strlen(seq_b);
   
   // Calculate largest amount of mem needed
-  unsigned int longest_alignment = (unsigned int)length_a +
-                                   (unsigned int)length_b;
+//   unsigned int longest_alignment = (unsigned int)length_a +
+//                                   (unsigned int)length_b;
   
   unsigned int score_width = length_a+1;
   unsigned int score_height = length_b+1;
@@ -75,8 +78,8 @@ void alighment_cpu (char* seq_a, char* seq_b)
   
   // [0][0]
   match_score[0] = 0;
-    int mismatch = -1;
-    int match = 1;
+    // int mismatch = -1;
+    // int match = 1;
     int indel = -1;
   
   // work along first row -> [i][0]
@@ -191,9 +194,9 @@ double CPUtime(){
 
 int main(void){
 
-    for (int size = 512; size < 32768; size *= 2){
+    for (int size = 512; size < 32768/2; size *= 2){
         //generate sequences
-        print("size is %d", size);
+        printf("size is %d\n", size);
         char* h_seq_a = (char*) malloc(sizeof(char) * size);
         char* h_seq_b = (char*) malloc(sizeof(char) * size);
         generateSequence(h_seq_a, h_seq_b, size);
@@ -211,6 +214,7 @@ int main(void){
         //run alignment on GPU
         alighment_gpu(h_seq_a, h_seq_b, size);
 
-
+        printf("***************************************\n");
     }
 }
+
