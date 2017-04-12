@@ -7,7 +7,7 @@ extern "C" {
 #include "stdio.h"
 #include <cuda.h>
 //#include "alighment.c"
-
+#define DEBUG 1
 void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 {
     char* d_seq_a;
