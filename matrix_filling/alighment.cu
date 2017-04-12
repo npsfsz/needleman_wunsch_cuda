@@ -9,6 +9,8 @@ extern "C" {
 //#include "alighment.c"
 #define LAUNCH 
 #define DEBUG 
+#define MAX_BLK 1//4
+#define MAX_THREAD 4//2048
 void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 {
     char* d_seq_a;
@@ -29,13 +31,13 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
     cudaDeviceSynchronize();    
     double time1 =  CPUtime();
     //do the work
-    for (int blocks = 1; blocks <= 1; blocks *= 2){//launch with 1, 2, or 4 blocks
-        int block_size = 2048/blocks;
+    for (int blocks = 1; blocks <= MAX_BLK; blocks *= 2){//launch with 1, 2, or 4 blocks
+        int block_size = MAX_THREAD/blocks;
 		int threads;
         if (seq_size < block_size){
             threads = seq_size;//assign just enough threads for each block
         }else{
-            threads = 2048/blocks;//assign max threads
+            threads = MAX_THREAD/blocks;//assign max threads
         }
 
         dim3 grid(blocks, 1 ,1);
@@ -106,9 +108,9 @@ void align2(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 			mat_index = j + i;
 
 
-	                #ifdef DEBUG
-                        printf("thread_step %d, thread_id %d,i %d, j %d\n", thread_step, tid, i, j );
-                        #endif
+	        #ifdef DEBUG
+            printf("thread_step %d, thread_id %d,i %d, j %d\n", thread_step, tid, i, j );
+            #endif
 
 
 			matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]

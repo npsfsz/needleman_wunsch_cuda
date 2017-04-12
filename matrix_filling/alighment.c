@@ -8,7 +8,8 @@
 #include <limits.h>
 #include "alighment.h"
 #include <cuda.h>
-
+#define MIN_SEQ_LEN 16//512
+#define MAX_SEQ_LEN 16//32768
 
 
 static long max(long a, long b, long c)
@@ -195,7 +196,7 @@ double CPUtime(){
 
 int main(void){
     int size;
-    for (size = 512; size < 32768; size *= 2){
+    for (size = MIN_SEQ_LEN; size < MAX_SEQ_LEN; size *= 2){
         //generate sequences
         printf("size is %d\n", size);
         char* h_seq_a = (char*) malloc(sizeof(char) * size);
