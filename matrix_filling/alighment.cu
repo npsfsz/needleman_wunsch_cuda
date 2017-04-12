@@ -25,7 +25,7 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 	cudaMemcpy((void*)d_seq_a, (void*)h_seq_a, bytes, cudaMemcpyHostToDevice);
     cudaMemcpy((void*)d_seq_b, (void*)h_seq_b, bytes, cudaMemcpyHostToDevice);
     cudaMemset((void*)d_matrix, 0, matrix_bytes);
-    
+    cudaDeviceSynchronize();    
     double time1 =  CPUtime();
     //do the work
     for (int blocks = 1; blocks <= 4; blocks *= 2){//launch with 1, 2, or 4 blocks
@@ -54,6 +54,7 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
         }
 
     }
+    cudaDeviceSynchronize();
     double time2 = CPUtime();
 	printf("GPU reduction took %f\n", time2-time1);
     cudaFree((void*) d_seq_a);

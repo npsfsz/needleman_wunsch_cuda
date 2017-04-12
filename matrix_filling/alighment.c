@@ -130,7 +130,8 @@ void alighment_cpu (char* seq_a, char* seq_b)
 
 
 void generateSequence(char* seq_a, char* seq_b, int size){
-    for (int i = 0; i < size; i++){
+    int i;
+    for (i = 0; i < size; i++){
         srand(time(NULL));
         int random = rand() % 5;
         switch(random) {
@@ -193,8 +194,8 @@ double CPUtime(){
 }
 
 int main(void){
-
-    for (int size = 512; size < 32768/2; size *= 2){
+    int size;
+    for (size = 512; size < 32768; size *= 2){
         //generate sequences
         printf("size is %d\n", size);
         char* h_seq_a = (char*) malloc(sizeof(char) * size);
