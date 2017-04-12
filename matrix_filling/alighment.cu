@@ -7,7 +7,8 @@ extern "C" {
 #include "stdio.h"
 #include <cuda.h>
 //#include "alighment.c"
-#define DEBUG 1
+//#define LAUNCH 
+#define DEBUG 
 void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 {
     char* d_seq_a;
@@ -28,7 +29,7 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
     cudaDeviceSynchronize();    
     double time1 =  CPUtime();
     //do the work
-    for (int blocks = 1; blocks <= 4; blocks *= 2){//launch with 1, 2, or 4 blocks
+    for (int blocks = 1; blocks <= 1; blocks *= 2){//launch with 1, 2, or 4 blocks
         int block_size = 2048/blocks;
 		int threads;
         if (seq_size < block_size){
@@ -45,8 +46,8 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 
         for (int block_step = 0; block_step < max_block_step; block_step++){
 
-            #ifdef DEBUG
-            printf("Debug Message:\n  blocks %d, threads %d, block_step %d, block_size %d\n", blocks, threads, block_step, block_size);
+            #ifdef LAUNCH
+            printf("blocks %d, threads %d, block_step %d, block_size %d\n", blocks, threads, block_step, block_size);
             #endif
 
 			if (block_step < blocks){
@@ -197,12 +198,18 @@ void align4(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 		int thread_step_length = (block_width - thread_step - 1) < 0 ? (thread_step + 1 - block_width) : (block_width - thread_step - 1) ;//this is the actual length for each thread step, it decreases after hitting the longest
 		int mat_index;
 		while (antidiagonal_thread_index < thread_step_length){
+
 			// It's an indexing thing...
 			//unsigned long new_index = (unsigned long)j*score_width + i;
 			int j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index) * mat_width;
-			int i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index);;
+			int i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index);
 			int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
 			mat_index = j + i;
+
+            #ifdef DEBUG
+            printf("thread_step %d, thread_id %d,i %d, j %d\n", thread_step, tid, i, j );
+            #endif
+
 			matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
 									matrix[mat_index - 1], // [i-1][j]
 									matrix[mat_index - mat_width])
