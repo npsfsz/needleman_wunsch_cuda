@@ -7,7 +7,7 @@ extern "C" {
 #include "stdio.h"
 #include <cuda.h>
 //#include "alighment.c"
-//#define LAUNCH 
+#define LAUNCH 
 #define DEBUG 
 void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 {
@@ -104,6 +104,13 @@ void align2(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 			int i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index);
 			int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
 			mat_index = j + i;
+
+
+	                #ifdef DEBUG
+                        printf("thread_step %d, thread_id %d,i %d, j %d\n", thread_step, tid, i, j );
+                        #endif
+
+
 			matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
 									matrix[mat_index - 1], // [i-1][j]
 									matrix[mat_index - mat_width])
