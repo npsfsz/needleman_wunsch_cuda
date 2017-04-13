@@ -32,44 +32,44 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 
     //do the work
     for (int max_blocks = 1; max_blocks <= MAX_BLK; max_blocks *= 2){//launch with 1, 2, or 4 blocks
-        int block_size = seq_size/max_blocks;
-        int threads;
-        if (seq_size < block_size){
-            threads = seq_size;//assign just enough threads for each block
-        }else{
-            threads = (MAX_THREAD/max_blocks) > 1024 ? 1024 : (MAX_THREAD/max_blocks);//assign max threads
-        }
+	int block_size = seq_size/max_blocks;
+	int threads;
+	if (seq_size < block_size){
+	    threads = seq_size;//assign just enough threads for each block
+	}else{
+	    threads = (MAX_THREAD/max_blocks) > 1024 ? 1024 : (MAX_THREAD/max_blocks);//assign max threads
+	}
 
 
 
-         int max_block_step = 2 * max_blocks -1;
-         int mat_width = seq_size + 1;
-        double time1 =  CPUtime();
-        for (int block_step = 0; block_step < max_block_step; block_step++){
+	 int max_block_step = 2 * max_blocks -1;
+	 int mat_width = seq_size + 1;
+	double time1 =  CPUtime();
+	for (int block_step = 0; block_step < max_block_step; block_step++){
 
 
-            int blocks = block_step + 1 < max_blocks ? (block_step + 1) : (max_block_step - block_step);
-            dim3 grid(blocks, 1 ,1);
-            dim3 block(threads, 1, 1);
+	    int blocks = block_step + 1 < max_blocks ? (block_step + 1) : (max_block_step - block_step);
+	    dim3 grid(blocks, 1 ,1);
+	    dim3 block(threads, 1, 1);
 
-            #ifdef LAUNCH
-            printf("\nmax_blocks %d, threads %d, block_step %d, block_size %d, blocks %d\n", max_blocks, threads, block_step, block_size, blocks);
-            #endif
+	    #ifdef LAUNCH
+	    printf("\nmax_blocks %d, threads %d, block_step %d, block_size %d, blocks %d\n", max_blocks, threads, block_step, block_size, blocks);
+	    #endif
 
-            if (block_step+1 < max_blocks){
-                //printf("before longest\n");
-                align2<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width);
-            }else if (block_step+1 == max_blocks){
-                //printf("longest\n");
-                align4<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width, max_blocks);cudaDeviceSynchronize();
-            }else{
-                //printf("after longest\n");
-                align3<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width, max_blocks);
-            }
-            cudaDeviceSynchronize();
-        }
-        double time2 = CPUtime();
-        printf("GPU took %f blocks: %d\n", time2-time1, max_blocks);
+	    if (block_step+1 < max_blocks){
+		//printf("before longest\n");
+		align2<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width);
+	    }else if (block_step+1 == max_blocks){
+		//printf("longest\n");
+		align4<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width, max_blocks);cudaDeviceSynchronize();
+	    }else{
+		//printf("after longest\n");
+		align3<<< grid, block >>>(d_seq_a, d_seq_b, d_matrix, block_step, block_size, mat_width, max_blocks);
+	    }
+	    cudaDeviceSynchronize();
+	}
+	double time2 = CPUtime();
+	printf("GPU took %f blocks: %d\n", time2-time1, max_blocks);
 
     }
     cudaDeviceSynchronize();
@@ -87,14 +87,14 @@ void align2(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
     /****************
     grid size 1,2,4 largest antidiagonal length 1,2,4
     for each block step(1, 121, 1234321){
-        at each block step, let certain block work
-        for each thread step(0 to 2*blockwidth -1 ){
-            index = tid
-            while (index + numofthreads < stepsize){
-                matrix[index] = max( , , )
-                index += numofthreads
-            }
-        {
+	at each block step, let certain block work
+	for each thread step(0 to 2*blockwidth -1 ){
+	    index = tid
+	    while (index + numofthreads < stepsize){
+		matrix[index] = max( , , )
+		index += numofthreads
+	    }
+	{
     }
      ****************/
     #ifdef DEBUG
@@ -108,36 +108,36 @@ void align2(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 
     for (int thread_step = 0; thread_step < max_thread_step; thread_step++){
 
-        antidiagonal_thread_index = tid;
-        int thread_step_length = (block_width - thread_step - 1) >= 0 ? (thread_step + 1) : (max_thread_step - thread_step ) ;//this is the actual length for each thread step, it decreases after hitting the longest
-        int mat_index;
-        while (antidiagonal_thread_index < thread_step_length){
-            // It's an indexing thing...
-            //unsigned long new_index = (unsigned long)j*score_width + i;
-            int i , j ;
-            if (thread_step + 1 <= block_width){
-                j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index*block_width) * mat_width;
-                i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index) * block_width;
-            }else{
-                j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width + (antidiagonal_block_index*block_width) * mat_width;
-                i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index) * block_width;
-            }
-            int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
-            mat_index = j + i;
+	antidiagonal_thread_index = tid;
+	int thread_step_length = (block_width - thread_step - 1) >= 0 ? (thread_step + 1) : (max_thread_step - thread_step ) ;//this is the actual length for each thread step, it decreases after hitting the longest
+	int mat_index;
+	while (antidiagonal_thread_index < thread_step_length){
+	    // It's an indexing thing...
+	    //unsigned long new_index = (unsigned long)j*score_width + i;
+	    int i , j ;
+	    if (thread_step + 1 <= block_width){
+		j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index*block_width) * mat_width;
+		i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index) * block_width;
+	    }else{
+		j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width + (antidiagonal_block_index*block_width) * mat_width;
+		i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index) * block_width;
+	    }
+	    int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
+	    mat_index = j + i;
 
 
-            #ifdef DEBUG
-            printf("thread_step %d, length %d, max %d, thread_id %d, ati %d,i %d, j %d, block_width %d, abi %d\n", thread_step, thread_step_length, max_thread_step, tid,antidiagonal_thread_index, i, j , block_width, antidiagonal_block_index);
-            #endif
+	    #ifdef DEBUG
+	    printf("thread_step %d, length %d, max %d, thread_id %d, ati %d,i %d, j %d, block_width %d, abi %d\n", thread_step, thread_step_length, max_thread_step, tid,antidiagonal_thread_index, i, j , block_width, antidiagonal_block_index);
+	    #endif
 
 
-            matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
-                                    matrix[mat_index - 1], // [i-1][j]
-                                    matrix[mat_index - mat_width])
-                                    + current_score; //[i][j-1]
-            //mat_index = mat_index + num_threads * matrix_width - num_threads;
-            antidiagonal_thread_index += num_threads;
-        }
+	    matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
+				    matrix[mat_index - 1], // [i-1][j]
+				    matrix[mat_index - mat_width])
+				    + current_score; //[i][j-1]
+	    //mat_index = mat_index + num_threads * matrix_width - num_threads;
+	    antidiagonal_thread_index += num_threads;
+	}
     // __syncthreads;
     }
 
@@ -153,14 +153,14 @@ void align3(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
     /****************
     grid size 1,2,4 largest antidiagonal length 1,2,4
     for each block step(1, 121, 1234321){
-        at each block step, let certain block work
-        for each thread step(0 to 2*blockwidth -1 ){
-            index = tid
-            while (index + numofthreads < stepsize){
-                matrix[index] = max( , , )
-                index += numofthreads
-            }
-        {
+	at each block step, let certain block work
+	for each thread step(0 to 2*blockwidth -1 ){
+	    index = tid
+	    while (index + numofthreads < stepsize){
+		matrix[index] = max( , , )
+		index += numofthreads
+	    }
+	{
     }
      ****************/
     #ifdef DEBUG
@@ -174,39 +174,39 @@ void align3(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
     int block_step_length = gridDim.x;
     for (int thread_step = 0; thread_step < max_thread_step; thread_step++){
 
-        antidiagonal_thread_index = tid;
-        int thread_step_length = (block_width - thread_step - 1) >= 0 ? (thread_step + 1) : (max_thread_step - thread_step ) ;//this is the actual length for each thread step, it decreases after hitting the longest
-        int mat_index;
-        while (antidiagonal_thread_index < thread_step_length){
-            // It's an indexing thing...
-            //unsigned long new_index = (unsigned long)j*score_width + i;
+	antidiagonal_thread_index = tid;
+	int thread_step_length = (block_width - thread_step - 1) >= 0 ? (thread_step + 1) : (max_thread_step - thread_step ) ;//this is the actual length for each thread step, it decreases after hitting the longest
+	int mat_index;
+	while (antidiagonal_thread_index < thread_step_length){
+	    // It's an indexing thing...
+	    //unsigned long new_index = (unsigned long)j*score_width + i;
 
-           int i , j ;
-            if (thread_step + 1 <= block_width){
-                j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index + (max_block_step_length - block_step_length))*block_width * mat_width;
-                i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index - (max_block_step_length - block_step_length))*block_width;
-            }else{
-                j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width + (antidiagonal_block_index + (max_block_step_length - block_step_length))*block_width * mat_width;
-                i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index - (max_block_step_length - block_step_length))*block_width;
-            }
-            int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
-            mat_index = j + i;
-
-
-            #ifdef DEBUG
-            printf("thread_step %d, length %d, max %d, thread_id %d, ati %d,i %d, j %d, block_width %d, abi %d\n", thread_step, thread_step_length, max_thread_step, tid,antidiagonal_thread_index, i, j , block_width, antidiagonal_block_index);
-            #endif
+	   int i , j ;
+	    if (thread_step + 1 <= block_width){
+		j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index + (max_block_step_length - block_step_length))*block_width * mat_width;
+		i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index - (max_block_step_length - block_step_length))*block_width;
+	    }else{
+		j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width + (antidiagonal_block_index + (max_block_step_length - block_step_length))*block_width * mat_width;
+		i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index - (max_block_step_length - block_step_length))*block_width;
+	    }
+	    int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
+	    mat_index = j + i;
 
 
+	    #ifdef DEBUG
+	    printf("thread_step %d, length %d, max %d, thread_id %d, ati %d,i %d, j %d, block_width %d, abi %d\n", thread_step, thread_step_length, max_thread_step, tid,antidiagonal_thread_index, i, j , block_width, antidiagonal_block_index);
+	    #endif
 
 
-            matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
-                                    matrix[mat_index - 1], // [i-1][j]
-                                    matrix[mat_index - mat_width])
-                                    + current_score; //[i][j-1]
-            //mat_index = mat_index + num_threads * matrix_width - num_threads;
-            antidiagonal_thread_index += num_threads;
-        }
+
+
+	    matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
+				    matrix[mat_index - 1], // [i-1][j]
+				    matrix[mat_index - mat_width])
+				    + current_score; //[i][j-1]
+	    //mat_index = mat_index + num_threads * matrix_width - num_threads;
+	    antidiagonal_thread_index += num_threads;
+	}
     // __syncthreads;
     }
 
@@ -222,14 +222,14 @@ void align4(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
     /****************
     grid size 1,2,4 largest antidiagonal length 1,2,4
     for each block step(1, 121, 1234321){
-        at each block step, let certain block work
-        for each thread step(0 to 2*blockwidth -1 ){
-            index = tid
-            while (index + numofthreads < stepsize){
-                matrix[index] = max( , , )
-                index += numofthreads
-            }
-        {
+	at each block step, let certain block work
+	for each thread step(0 to 2*blockwidth -1 ){
+	    index = tid
+	    while (index + numofthreads < stepsize){
+		matrix[index] = max( , , )
+		index += numofthreads
+	    }
+	{
     }
      ****************/
     #ifdef DEBUG
@@ -243,45 +243,45 @@ void align4(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
     //int block_step_length = gridDim.x;
     for (int thread_step = 0; thread_step < max_thread_step; thread_step++){
 
-        antidiagonal_thread_index = tid;
-        int thread_step_length = (block_width - thread_step - 1) >= 0 ? (thread_step + 1) : (max_thread_step - thread_step ) ;//this is the actual length for each thread step, it decreases after hitting the longest
-        int mat_index;
-        while (antidiagonal_thread_index < thread_step_length){
+	antidiagonal_thread_index = tid;
+	int thread_step_length = (block_width - thread_step - 1) >= 0 ? (thread_step + 1) : (max_thread_step - thread_step ) ;//this is the actual length for each thread step, it decreases after hitting the longest
+	int mat_index;
+	while (antidiagonal_thread_index < thread_step_length){
 
-            // It's an indexing thing...
-            //unsigned long new_index = (unsigned long)j*score_width + i;
-
-
-            int i , j ;
-            if (thread_step + 1 <= block_width){
-                j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index* block_width) * mat_width;
-                i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index)*block_width;
-            }else{
-                j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width + (antidiagonal_block_index* block_width) * mat_width;
-                i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index)*block_width;
-            }
-            int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
-            mat_index = j + i;
+	    // It's an indexing thing...
+	    //unsigned long new_index = (unsigned long)j*score_width + i;
 
 
-            #ifdef DEBUG
-            printf("thread_step %d, length %d, max %d, thread_id %d, ati %d,i %d, j %d, block_width %d, abi %d\n", thread_step, thread_step_length, max_thread_step, tid,antidiagonal_thread_index, i, j , block_width, antidiagonal_block_index);
-            #endif
+	    int i , j ;
+	    if (thread_step + 1 <= block_width){
+		j = (1 + antidiagonal_thread_index) * mat_width + (antidiagonal_block_index* block_width) * mat_width;
+		i = (1 + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index)*block_width;
+	    }else{
+		j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width + (antidiagonal_block_index* block_width) * mat_width;
+		i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) + (block_step - antidiagonal_block_index)*block_width;
+	    }
+	    int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
+	    mat_index = j + i;
 
 
+	    #ifdef DEBUG
+	    printf("thread_step %d, length %d, max %d, thread_id %d, ati %d,i %d, j %d, block_width %d, abi %d\n", thread_step, thread_step_length, max_thread_step, tid,antidiagonal_thread_index, i, j , block_width, antidiagonal_block_index);
+	    #endif
 
 
 
 
 
-            matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
-                                    matrix[mat_index - 1], // [i-1][j]
-                                    matrix[mat_index - mat_width])
-                                    + current_score; //[i][j-1]
-            //mat_index = mat_index + num_threads * matrix_width - num_threads;
-            antidiagonal_thread_index += num_threads;
-        }
-        // __syncthreads;
+
+
+	    matrix[mat_index] = max_gpu(matrix[mat_index - mat_width - 1], //[i-1][j-1]
+				    matrix[mat_index - 1], // [i-1][j]
+				    matrix[mat_index - mat_width])
+				    + current_score; //[i][j-1]
+	    //mat_index = mat_index + num_threads * matrix_width - num_threads;
+	    antidiagonal_thread_index += num_threads;
+	}
+	// __syncthreads;
     }
 
 
