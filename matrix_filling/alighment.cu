@@ -11,7 +11,7 @@ extern "C" {
 //#include "alighment.c"
 //#define LAUNCH
 //#define DEBUG
-#define MAX_BLK 4//64
+#define MAX_BLK 16//64
 #define MAX_THREAD 2048//2048
 void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
 {
@@ -33,7 +33,7 @@ void alighment_gpu(char* h_seq_a, char* h_seq_b, int seq_size)
     //cudaDeviceSynchronize();
     //cudaProfilerStart();
     //do the work
-    for (int max_blocks = 1; max_blocks <= MAX_BLK; max_blocks *= 2){//launch with 1, 2, or 4 blocks
+    for (int max_blocks = 16; max_blocks <= MAX_BLK; max_blocks *= 2){//launch with 1, 2, or 4 blocks
 		int block_size = seq_size/max_blocks;
 		int threads;
 		if (seq_size < block_size){
@@ -127,7 +127,7 @@ void align2(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 			}else{
 				j = (antidiagonal_thread_index + (thread_step - max_thread_step)+ (block_width + 1)) * mat_width//thread
 				    	+ (antidiagonal_block_index*block_width) * mat_width;//block
-				i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) //thread
+				i = (block_width - antidiagonal_thread_index) //thread
 					+ (block_step - antidiagonal_block_index) * block_width;//block
 			}
 			int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
@@ -190,15 +190,15 @@ void align3(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 			//unsigned long new_index = (unsigned long)j*score_width + i;
 
 		   int i , j ;
-			if (thread_step + 1 <= block_width){
+			if (thread_step  < block_width){
 			j = (1 + antidiagonal_thread_index) * mat_width //thread
-					+ (antidiagonal_block_index + (max_block_step_length - block_step_length))*block_width * mat_width;//block
+					+ (antidiagonal_block_index + max_block_step_length - block_step_length)*block_width * mat_width;//block
 			i = (1 + thread_step - antidiagonal_thread_index) //thread
 					+ (block_step - antidiagonal_block_index - (max_block_step_length - block_step_length))*block_width;//block
 			}else{
-			j = (antidiagonal_thread_index + (thread_step - max_thread_step) //thread
-					+ (block_width + 1)) * mat_width + (antidiagonal_block_index + (max_block_step_length - block_step_length))*block_width * mat_width;//block
-			i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) //thread
+			j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width//thread
+			    			       + (antidiagonal_block_index + max_block_step_length - block_step_length)*block_width * mat_width;//block
+			i = (block_width - antidiagonal_thread_index) //thread
 					+ (block_step - antidiagonal_block_index - (max_block_step_length - block_step_length))*block_width;//block
 			}
 			int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;
@@ -265,15 +265,15 @@ void align4(char* seq_a, char* seq_b, char* matrix, int block_step, int block_wi
 
 
 			int i , j ;
-			if (thread_step + 1 <= block_width){
+			if (thread_step  < block_width){
 			j = (1 + antidiagonal_thread_index) * mat_width + //thread
 					(antidiagonal_block_index* block_width) * mat_width;//block
 			i = (1 + thread_step - antidiagonal_thread_index) //thread
 					+ (block_step - antidiagonal_block_index)*block_width;//block
 			}else{
-			j = (antidiagonal_thread_index + (thread_step - max_thread_step) //thread
-					+ (block_width + 1)) * mat_width + (antidiagonal_block_index* block_width) * mat_width;//block
-			i = ((block_width - thread_step) + thread_step - antidiagonal_thread_index) //thread
+			j = (antidiagonal_thread_index + (thread_step - max_thread_step) + (block_width + 1)) * mat_width//thread
+			    			       	+ (antidiagonal_block_index* block_width) * mat_width;//block
+			i = (block_width  - antidiagonal_thread_index) //thread
 					+ (block_step - antidiagonal_block_index)*block_width;//block
 			}
 			int current_score = (seq_a[i-1] == seq_b[j-1]) ? 1 : -1;

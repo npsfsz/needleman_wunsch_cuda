@@ -9,7 +9,7 @@
 #include "alighment.h"
 #include <cuda.h>
 #define MIN_SEQ_LEN 512//512
-#define MAX_SEQ_LEN 512//16384
+#define MAX_SEQ_LEN 16384//16384
 
 
 static long max(long a, long b, long c)
