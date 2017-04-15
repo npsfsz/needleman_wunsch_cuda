@@ -1,4 +1,4 @@
-#define DEBUG 1
+#define DEBUG
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -8,8 +8,8 @@
 #include <limits.h>
 #include "alighment.h"
 #include <cuda.h>
-#define MIN_SEQ_LEN 512//512
-#define MAX_SEQ_LEN 16384//16384
+#define MIN_SEQ_LEN 8//512
+#define MAX_SEQ_LEN 8//16384
 
 
 static long max(long a, long b, long c)
@@ -127,6 +127,8 @@ void alighment_cpu (char* seq_a, char* seq_b)
 
     }
   }
+  
+  //free(match_score);
 }
 
 
@@ -203,20 +205,26 @@ int main(void){
         char* h_seq_b = (char*) malloc(sizeof(char) * size);
         generateSequence(h_seq_a, h_seq_b, size);
 
-        //time()
-        double time1 = CPUtime();
-        //runing alignment on CPU
-        alighment_cpu(h_seq_a, h_seq_b);
-        //time()
-        double time2 = CPUtime();
-        printf("CPU alightment took %f\n", time2 - time1);
-
-
+        int run;
+        double total_cpu_time = 0;
+        for (run = 0; run < MAX_RUN; run++){
+            //time()
+            double time1 = CPUtime();
+            //runing alignment on CPU
+            alighment_cpu(h_seq_a, h_seq_b);
+            //time()
+            double time2 = CPUtime();
+            total_cpu_time += time2-time1;    
+        }
+        printf("CPU alightment took %f\n", total_cpu_time/MAX_RUN);
 
         //run alignment on GPU
-        alighment_gpu(h_seq_a, h_seq_b, size);
+        alighment_gpu(h_seq_a, h_seq_b, size, total_cpu_time/MAX_RUN);
 
+        
         printf("***************************************\n");
+        //free(h_seq_a);
+        //free(h_seq_b);
     }
 
     return 0;
