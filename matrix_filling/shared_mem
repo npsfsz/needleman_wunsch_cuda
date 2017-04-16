@@ -1,0 +1,110 @@
+size is 256
+CPU alightment took 0.000917
+Kernel warm up
+GPU took 0.000264 blocks: 1, speedup 3.471269
+GPU took 0.000339 blocks: 2, speedup 2.707515
+GPU took 0.000407 blocks: 4, speedup 2.256453
+GPU took 0.000479 blocks: 8, speedup 1.914759
+GPU took 0.000596 blocks: 16, speedup 1.538641
+GPU took 0.000089 blocks: 32, speedup 10.358862
+GPU took 0.000184 blocks: 64, speedup 4.982985
+***************************************
+size is 512
+CPU alightment took 0.002539
+Kernel warm up
+GPU took 0.000783 blocks: 1, speedup 3.241380
+GPU took 0.000696 blocks: 2, speedup 3.647456
+GPU took 0.000707 blocks: 4, speedup 3.588395
+GPU took 0.000783 blocks: 8, speedup 3.241804
+GPU took 0.000895 blocks: 16, speedup 2.837952
+GPU took 0.001110 blocks: 32, speedup 2.286870
+GPU took 0.000180 blocks: 64, speedup 14.102000
+***************************************
+size is 1024
+CPU alightment took 0.010527
+Kernel warm up
+GPU took 0.002916 blocks: 1, speedup 3.609962
+GPU took 0.002236 blocks: 2, speedup 4.706850
+GPU took 0.001641 blocks: 4, speedup 6.414572
+GPU took 0.001527 blocks: 8, speedup 6.892536
+GPU took 0.001622 blocks: 16, speedup 6.490614
+GPU took 0.001828 blocks: 32, speedup 5.759964
+GPU took 0.002250 blocks: 64, speedup 4.679141
+***************************************
+size is 2048
+CPU alightment took 0.048554
+Kernel warm up
+GPU took 0.013522 blocks: 1, speedup 3.590864
+GPU took 0.009533 blocks: 2, speedup 5.093336
+GPU took 0.005815 blocks: 4, speedup 8.349417
+GPU took 0.003804 blocks: 8, speedup 12.765062
+GPU took 0.003281 blocks: 16, speedup 14.798385
+GPU took 0.003470 blocks: 32, speedup 13.992177
+GPU took 0.003891 blocks: 64, speedup 12.477583
+***************************************
+size is 4096
+CPU alightment took 0.256990
+Kernel warm up
+GPU took 0.057901 blocks: 1, speedup 4.474870
+GPU took 0.031525 blocks: 2, speedup 8.218869
+
+GPU took 0.022372 blocks: 4, speedup 11.487144
+GPU took 0.012762 blocks: 8, speedup 20.136864
+GPU took 0.008602 blocks: 16, speedup 29.876669
+GPU took 0.008192 blocks: 32, speedup 31.372220
+GPU took 0.008456 blocks: 64, speedup 30.390675
+***************************************
+
+
+take 2
+
+ 
+
+size is 256
+CPU alightment took 0.000698
+Kernel warm up
+GPU took 0.000264 blocks: 1, speedup 2.640917
+GPU took 0.000330 blocks: 2, speedup 2.115753
+GPU took 0.000366 blocks: 4, speedup 1.909305
+GPU took 0.000372 blocks: 8, speedup 1.877139
+GPU took 0.000414 blocks: 16, speedup 1.687699
+GPU took 0.000039 blocks: 32, speedup 17.680822
+***************************************
+size is 512
+CPU alightment took 0.002557
+Kernel warm up
+GPU took 0.000765 blocks: 1, speedup 3.343603
+GPU took 0.000687 blocks: 2, speedup 3.723667
+GPU took 0.000680 blocks: 4, speedup 3.759148
+GPU took 0.000722 blocks: 8, speedup 3.543944
+GPU took 0.000764 blocks: 16, speedup 3.347892
+GPU took 0.000840 blocks: 32, speedup 3.046232
+***************************************
+size is 1024
+CPU alightment took 0.010602
+Kernel warm up
+GPU took 0.002916 blocks: 1, speedup 3.635453
+GPU took 0.002227 blocks: 2, speedup 4.760683
+GPU took 0.001614 blocks: 4, speedup 6.568044
+GPU took 0.001466 blocks: 8, speedup 7.232713
+GPU took 0.001491 blocks: 16, speedup 7.111720
+GPU took 0.001557 blocks: 32, speedup 6.808501
+***************************************
+size is 2048
+CPU alightment took 0.049532
+Kernel warm up
+GPU took 0.013808 blocks: 1, speedup 3.587117
+GPU took 0.009520 blocks: 2, speedup 5.202783
+GPU took 0.005786 blocks: 4, speedup 8.561089
+GPU took 0.003740 blocks: 8, speedup 13.245411
+GPU took 0.003149 blocks: 16, speedup 15.730252
+GPU took 0.003199 blocks: 32, speedup 15.482597
+***************************************
+size is 4096
+CPU alightment took 0.256290
+Kernel warm up
+GPU took 0.022042 blocks: 4, speedup 11.627538
+GPU took 0.012697 blocks: 8, speedup 20.185675
+GPU took 0.008468 blocks: 16, speedup 30.264334
+GPU took 0.007912 blocks: 32, speedup 32.392424
+***************************************

@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -8,8 +8,8 @@
 #include <limits.h>
 #include "alighment.h"
 #include <cuda.h>
-#define MIN_SEQ_LEN 8//512
-#define MAX_SEQ_LEN 8//16384
+#define MIN_SEQ_LEN 256//512
+#define MAX_SEQ_LEN 4096//16384
 
 
 static long max(long a, long b, long c)
@@ -127,7 +127,7 @@ void alighment_cpu (char* seq_a, char* seq_b)
 
     }
   }
-  
+  //printf("%d\n", match_score[score_height*score_width-1]);
   //free(match_score);
 }
 
